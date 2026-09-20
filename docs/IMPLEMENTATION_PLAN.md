@@ -115,7 +115,7 @@ Redirect URI в Яндекс OAuth; схема, host, port и path Redirect URI 
 
 ### Имя образа
 
-Каноническое имя зафиксировано: `ghcr.io/tipz/ht5`. Publish и deploy workflow не
+Каноническое имя зафиксировано: `ghcr.io/tipz/ht6`. Publish и deploy workflow не
 должны вычислять другое имя из `GITHUB_REPOSITORY`.
 
 ### Конфиденциальность аналитики
@@ -220,7 +220,7 @@ Environment.
 
 - Использовать разрешённый Яндекс ID как единственный OAuth-провайдер.
 - Зафиксировать `main`, Docker-host `192.168.1.26` и образ
-  `ghcr.io/tipz/ht5`.
+  `ghcr.io/tipz/ht6`.
 - Установить на production-host защищённый self-hosted runner с Docker Compose;
   не использовать его для workflow из pull request.
 - Зафиксировать схему/порт production URL, зарегистрировать точный Redirect URI в
@@ -379,7 +379,7 @@ Environment `production`, self-hosted runner машины `192.168.1.26` и
 - Разрешить production deploy только для push в `main`.
 - Выполнять deploy job только на защищённом self-hosted runner машины
   `192.168.1.26`; не запускать на нём pull request jobs.
-- Всегда разворачивать `ghcr.io/tipz/ht5@<digest>`.
+- Всегда разворачивать `ghcr.io/tipz/ht6@<digest>`.
 - Использовать существующие Compose и отдельный `migrate`.
 - После deploy ждать `/health/ready` и запускать smoke.
 - Настроить uptime monitor для `/health` и alert contact.

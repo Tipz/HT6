@@ -15,7 +15,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  IMAGE_NAME: ghcr.io/tipz/ht5
+  IMAGE_NAME: ghcr.io/tipz/ht6
 
 jobs:
   quality:
@@ -127,7 +127,7 @@ jobs:
       APP_PORT: 8080
       POSTGRES_PASSWORD: ci-only-password
       SECURE_COOKIES: 'false'
-      TOGETHER_IMAGE: ghcr.io/tipz/ht5:ci-placeholder
+      TOGETHER_IMAGE: ghcr.io/tipz/ht6:ci-placeholder
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -293,7 +293,7 @@ jobs:
           : "${APP_URL:?Configure the production APP_URL variable}"
           : "${TOGETHER_IMAGE:?Publish did not provide an immutable image reference}"
           case "$TOGETHER_IMAGE" in
-            ghcr.io/tipz/ht5@sha256:*) ;;
+            ghcr.io/tipz/ht6@sha256:*) ;;
             *) echo "Refusing a non-immutable or unexpected image reference" >&2; exit 1 ;;
           esac
           cd "$DEPLOY_PATH"

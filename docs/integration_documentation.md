@@ -81,7 +81,7 @@ server-side environment values, которые Compose отображает в
 
 Production target — локальная машина `192.168.1.26` с Docker Compose. Защищённый
 self-hosted GitHub Actions runner на этой машине получает digest, разворачивает
-`ghcr.io/tipz/ht5@<digest>`, выполняет `migrate`, запускает `app` и ждёт успешный
+`ghcr.io/tipz/ht6@<digest>`, выполняет `migrate`, запускает `app` и ждёт успешный
 `/health/ready`. GitHub-hosted jobs выполняют проверки и публикацию образа, но не
 пытаются обращаться к приватному LAN-адресу. Self-hosted runner используется
 только deployment job после push в `main` и никогда не запускает код из pull
@@ -92,7 +92,7 @@ request.
 - схему и порт production URL на `192.168.1.26`;
 - TLS/reverse proxy либо явно зафиксированный режим изолированного LAN-стенда;
 - каталог Compose и labels защищённого self-hosted runner;
-- доступ Docker host к `ghcr.io/tipz/ht5`, если package является приватным;
+- доступ Docker host к `ghcr.io/tipz/ht6`, если package является приватным;
 - backup и rollback procedure.
 
 ### Логи и rollback на Docker host
@@ -109,7 +109,7 @@ docker compose --env-file .env.deploy --file docker-compose.deploy.yml logs --si
 GitHub run/package history, задайте его только для команды и обновите приложение:
 
 ```bash
-export TOGETHER_IMAGE='ghcr.io/tipz/ht5@sha256:<previous-digest>'
+export TOGETHER_IMAGE='ghcr.io/tipz/ht6@sha256:<previous-digest>'
 docker compose --env-file .env.deploy --file docker-compose.deploy.yml pull app
 docker compose --env-file .env.deploy --file docker-compose.deploy.yml up -d --no-deps app
 curl --fail "$APP_URL/health/ready"

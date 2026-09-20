@@ -9,7 +9,7 @@ Identity, EF Core/Npgsql и PostgreSQL. ДЗ № 6 добавляет CI/CD, sec
 | Требование | Реализация |
 | --- | --- |
 | CI/CD | `.github/workflows/ci.yml`: format/audit → build/tests → backend smoke → publish → deploy → production smoke |
-| Container | `ghcr.io/tipz/ht5`, `linux/amd64` и `linux/arm64`, deployment только по digest |
+| Container | `ghcr.io/tipz/ht6`, `linux/amd64` и `linux/arm64`, deployment только по digest |
 | Deployment | `docker-compose.deploy.yml`, отдельный `migrate`, persistent PostgreSQL и Data Protection |
 | OAuth2 | Стандартный ASP.NET Core OAuth handler для Яндекс ID; password login сохранён |
 | Аналитика | Opt-in Яндекс Метрика, очищенные SPA paths, две фиксированные цели |

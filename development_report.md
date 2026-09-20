@@ -253,12 +253,12 @@ UI, создание серверного примера, повторную з�
 
 ### GitHub Actions и контейнерный registry
 
-В репозитории [Tipz/HT5](https://github.com/Tipz/HT5) настроены три workflow:
+В репозитории [Tipz/HT6](https://github.com/Tipz/HT6) настроены три workflow:
 
 - `CI` собирает solution в Release и запускает 32 Core/UI- и 4 API-теста;
 - `Backend browser smoke` поднимает Docker Compose с PostgreSQL и выполняет
   Chromium-сценарий текущей backend-версии;
-- `Publish container image` публикует `ghcr.io/tipz/ht5` для `linux/amd64` и
+- `Publish container image` публикует `ghcr.io/tipz/ht6` для `linux/amd64` и
   `linux/arm64`, добавляет OCI metadata, provenance и SBOM.
 
 Все три workflow успешно прошли на коммите с multi-platform Dockerfile. Публичный
@@ -274,6 +274,6 @@ GHCR manifest проверен анонимным запросом и содер
 повторную обработку неизменённых данных и карточек.
 
 Исходники, документация и результаты опубликованы на
-[GitHub](https://github.com/Tipz/HT5), готовый контейнер — в
-[GHCR](https://github.com/Tipz/HT5/pkgs/container/ht5). Локальный запуск, CI и
+[GitHub](https://github.com/Tipz/HT6), готовый контейнер — в
+[GHCR](https://github.com/Tipz/HT6/pkgs/container/ht6). Локальный запуск, CI и
 перенос образа описаны в [README](README.md).

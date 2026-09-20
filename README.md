@@ -30,11 +30,11 @@ docker compose up --build
 Готовый multi-platform образ публикуется в GitHub Container Registry:
 
 ```text
-ghcr.io/tipz/ht5:latest
+ghcr.io/tipz/ht6:latest
 ```
 
 `latest` следует за веткой `main`. Production workflow разворачивает только
-неизменяемую ссылку `ghcr.io/tipz/ht5@sha256:...`, полученную из publish job.
+неизменяемую ссылку `ghcr.io/tipz/ht6@sha256:...`, полученную из publish job.
 
 Адаптивное приложение для сравнения семейных поездок по бюджету, дороге и удобствам для детей.
 Frontend создан в ДЗ № 4 по [исходному ТЗ](docs/technical_specification.md) и расширен backend в ДЗ № 5.
@@ -263,8 +263,8 @@ API проверяет revision и возвращает `409`, если запи
 - [Результаты браузерных тестов](docs/evidence/browser-results.json)
 - [Измерения производительности](docs/evidence/performance.json)
 
-Репозиторий опубликован на [GitHub](https://github.com/Tipz/HT5), готовый образ —
-в [GitHub Container Registry](https://github.com/Tipz/HT5/pkgs/container/ht5).
+Репозиторий опубликован на [GitHub](https://github.com/Tipz/HT6), готовый образ —
+в [GitHub Container Registry](https://github.com/Tipz/HT6/pkgs/container/ht6).
 Публичный HTTPS-стенд в рамках репозитория не разворачивается.
 
 ## Использованная документация

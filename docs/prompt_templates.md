@@ -57,13 +57,13 @@ Home Services Dashboard заменён на standalone Blazor WebAssembly и Ind
 - **Role:** инженер CI/CD и supply-chain security.
 - **Task:** связать format/audit, Release build, xUnit, Compose/Chromium smoke,
   multi-arch publish по digest и production deploy.
-- **Context:** `main`, `ghcr.io/tipz/ht5`, защищённый self-hosted runner на
+- **Context:** `main`, `ghcr.io/tipz/ht6`, защищённый self-hosted runner на
   `192.168.1.26`; pull request не публикует и не выполняется на production runner.
 - **Format:** один dependency graph, минимальные permissions, actions по полным
   commit SHA, явные Pending для внешней конфигурации.
 
 Ручная проверка: publish зависит от `backend_smoke`, deploy — от publish; deploy
-разрешён только для push в `main` и проверяет `ghcr.io/tipz/ht5@sha256:...`.
+разрешён только для push в `main` и проверяет `ghcr.io/tipz/ht6@sha256:...`.
 
 ## 7. OWASP review
 

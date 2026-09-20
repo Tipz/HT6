@@ -115,7 +115,7 @@ Compose сначала ждёт PostgreSQL, запускает одноразо�
 Workflow `.github/workflows/publish-container.yml` публикует публичный OCI-образ:
 
 ```text
-ghcr.io/tipz/ht5
+ghcr.io/tipz/ht6
 ```
 
 Manifest содержит `linux/amd64` и `linux/arm64`. Push в `master` обновляет теги
@@ -161,7 +161,7 @@ SHA-тег и повторите `up -d`. Обычный `docker compose ... dow
 
 Секреты нельзя передавать как Docker build arguments или сохранять в образе. Для
 приватной копии пакета целевой хост должен выполнить `docker login ghcr.io` с
-минимальным правом `read:packages`; текущий пакет `Tipz/HT5` доступен публично.
+минимальным правом `read:packages`; текущий пакет `Tipz/HT6` доступен публично.
 
 ## Запуск из исходников без Docker
 
