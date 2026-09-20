@@ -1,0 +1,36 @@
+@implements IDisposable
+@inject Together.Client.Analytics.AnalyticsClient Analytics
+
+@if (Analytics.Consent != Together.Client.Analytics.AnalyticsConsentState.Unavailable)
+{
+    <aside class="analytics-consent" aria-label="Настройки аналитики">
+        @if (Analytics.Consent == Together.Client.Analytics.AnalyticsConsentState.Unknown)
+        {
+            <p>Разрешить обезличенную аналитику посещений? Данные поездок и пользователя не отправляются.</p>
+            <MudButton Color="Color.Primary" Variant="MudBlazor.Variant.Filled" OnClick="Analytics.GrantAsync">Разрешить</MudButton>
+            <MudButton Variant="MudBlazor.Variant.Text" OnClick="Analytics.DenyAsync">Не разрешать</MudButton>
+        }
+        else if (Analytics.Consent == Together.Client.Analytics.AnalyticsConsentState.Granted)
+        {
+            <span>Обезличенная аналитика включена.</span>
+            <MudButton Variant="MudBlazor.Variant.Text" OnClick="Analytics.DenyAsync">Отозвать согласие</MudButton>
+        }
+        else
+        {
+            <span>Аналитика отключена.</span>
+            <MudButton Variant="MudBlazor.Variant.Text" OnClick="Analytics.GrantAsync">Разрешить</MudButton>
+        }
+    </aside>
+}
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        Analytics.Changed += OnChanged;
+        await Analytics.InitializeAsync();
+    }
+
+    private void OnChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Analytics.Changed -= OnChanged;
+}

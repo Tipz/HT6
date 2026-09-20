@@ -127,3 +127,19 @@ textarea { resize:vertical; }
     th:first-child { width:110px; min-width:110px; padding-left:10px; padding-right:10px; }
 }
 @media(prefers-reduced-motion:reduce) { html { scroll-behavior:auto; } }
+/* Analytics consent is deliberately compact and never obscures primary actions. */
+.analytics-consent {
+    position: fixed;
+    right: 1rem;
+    bottom: 1rem;
+    z-index: 1200;
+    max-width: 30rem;
+    padding: .75rem 1rem;
+    border: 1px solid #a9b8cc;
+    border-radius: .75rem;
+    background: #fff;
+    box-shadow: 0 .3rem 1.2rem rgb(31 48 76 / 18%);
+}
+
+.analytics-consent p { margin: 0 0 .5rem; }
+.auth-divider { margin: .75rem 0 .25rem; color: #526278; text-align: center; }

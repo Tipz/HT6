@@ -1,5 +1,6 @@
 @page "/login"
 @inject AuthClient Auth
+@inject Together.Client.Analytics.AnalyticsClient Analytics
 @inject NavigationManager Navigation
 
 <PageTitle>Вход — Вместе в путь</PageTitle>
@@ -10,10 +11,15 @@
         <EditForm Model="model" OnValidSubmit="Submit">
             <DataAnnotationsValidator />
             <MudTextField @bind-Value="model.Email" Label="Email" InputType="InputType.Email" Required="true" Disabled="busy" />
-            <MudTextField @bind-Value="model.Password" Label="Пароль" InputType="InputType.Password" Required="true" Disabled="busy" HelperText="Не менее 5 символов" />
+            <MudTextField @bind-Value="model.Password" Label="Пароль" InputType="InputType.Password" Required="true" Disabled="busy" HelperText="Не менее 12 символов" />
             @if (error is not null) { <MudAlert Severity="Severity.Error">@error</MudAlert> }
             <MudButton ButtonType="ButtonType.Submit" Color="Color.Primary" Variant="MudBlazor.Variant.Filled" Disabled="busy">@(busy ? "Подождите…" : register ? "Создать аккаунт" : "Войти")</MudButton>
         </EditForm>
+        @if (yandexEnabled)
+        {
+            <div class="auth-divider"><span>или</span></div>
+            <MudButton OnClick="StartYandexLogin" Variant="MudBlazor.Variant.Outlined" Disabled="busy">Войти через Яндекс ID</MudButton>
+        }
         <MudButton OnClick="Toggle" Variant="MudBlazor.Variant.Text" Disabled="busy">@(register ? "У меня уже есть аккаунт" : "Создать аккаунт")</MudButton>
     </section>
 </main>
@@ -22,7 +28,43 @@
     private readonly Credentials model = new();
     private bool register;
     private bool busy;
+    private bool yandexEnabled;
     private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        yandexEnabled = (await Auth.SettingsAsync()).YandexLoginEnabled;
+        var query = ParseQuery(Navigation.ToAbsoluteUri(Navigation.Uri).Query);
+        if (query.TryGetValue("oauthError", out var oauthError))
+        {
+            error = oauthError switch
+            {
+                "cancelled" => "Вход через Яндекс ID отменён или не завершён.",
+                "email_conflict" => "Этот email уже используется. Войдите существующим способом; аккаунты автоматически не связываются.",
+                "email_missing" => "Яндекс ID не предоставил email, необходимый для входа.",
+                "invalid_return_url" => "Некорректный адрес возврата после входа.",
+                _ => "Не удалось войти через Яндекс ID. Попробуйте ещё раз."
+            };
+        }
+        if (query.TryGetValue("oauthResult", out var result) && result == "yandex")
+        {
+            busy = true;
+            if (await Auth.CurrentAsync() is not null)
+            {
+                await Analytics.InitializeAsync();
+                await Analytics.LoginSucceededAsync("yandex");
+                var returnUrl = query.TryGetValue("returnUrl", out var value) && IsLocalPath(value)
+                    ? value
+                    : "/";
+                Navigation.NavigateTo(returnUrl, forceLoad: true);
+            }
+            else
+            {
+                error = "Не удалось завершить вход через Яндекс ID.";
+                busy = false;
+            }
+        }
+    }
 
     private void Toggle() { register = !register; error = null; }
 
@@ -34,10 +76,29 @@
         {
             if (register) await Auth.RegisterAsync(model.Email.Trim(), model.Password);
             else await Auth.LoginAsync(model.Email.Trim(), model.Password);
+            await Analytics.InitializeAsync();
+            await Analytics.LoginSucceededAsync("password");
             Navigation.NavigateTo("/");
         }
         catch (HttpRequestException ex) { error = ex.Message; }
         finally { busy = false; }
+    }
+
+    private void StartYandexLogin() => Navigation.NavigateTo(Auth.YandexLoginUrl(), forceLoad: true);
+
+    private static bool IsLocalPath(string value) => value.StartsWith('/') && !value.StartsWith("//") && !value.StartsWith("/\\");
+
+    private static Dictionary<string, string> ParseQuery(string query)
+    {
+        var values = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var item in query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var parts = item.Split('=', 2);
+            var key = Uri.UnescapeDataString(parts[0].Replace('+', ' '));
+            var value = parts.Length == 2 ? Uri.UnescapeDataString(parts[1].Replace('+', ' ')) : "";
+            values[key] = value;
+        }
+        return values;
     }
 
     private sealed class Credentials

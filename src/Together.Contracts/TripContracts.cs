@@ -38,40 +38,79 @@ public sealed record VariantResponse(
 
 public sealed class TripWriteRequest
 {
-    public Guid? Id { get; init; }
-    public long ExpectedRevision { get; init; }
+    public Guid? Id
+    {
+        get; init;
+    }
+    public long ExpectedRevision
+    {
+        get; init;
+    }
     public string Name { get; init; } = "";
-    public DateOnly StartDate { get; init; }
-    public DateOnly EndDate { get; init; }
-    public int Adults { get; init; }
+    public DateOnly StartDate
+    {
+        get; init;
+    }
+    public DateOnly EndDate
+    {
+        get; init;
+    }
+    public int Adults
+    {
+        get; init;
+    }
     public int[] ChildAges { get; init; } = [];
 }
 
 public sealed class VariantWriteRequest
 {
-    public Guid? Id { get; init; }
-    public long ExpectedTripRevision { get; init; }
-    public long ExpectedRevision { get; init; }
+    public Guid? Id
+    {
+        get; init;
+    }
+    public long ExpectedTripRevision
+    {
+        get; init;
+    }
+    public long ExpectedRevision
+    {
+        get; init;
+    }
     public string Name { get; init; } = "";
     public string Destination { get; init; } = "";
     public string Accommodation { get; init; } = "";
     public string SourceUrl { get; init; } = "";
     public string RoadDescription { get; init; } = "";
     public string Notes { get; init; } = "";
-    public int? TravelMinutes { get; init; }
-    public int? Transfers { get; init; }
+    public int? TravelMinutes
+    {
+        get; init;
+    }
+    public int? Transfers
+    {
+        get; init;
+    }
     public string Kitchen { get; init; } = "unknown";
     public string Crib { get; init; } = "unknown";
     public string Playground { get; init; } = "unknown";
-    public int? DistanceMeters { get; init; }
+    public int? DistanceMeters
+    {
+        get; init;
+    }
     public string DistanceTarget { get; init; } = "";
     public long?[] Expenses { get; init; } = new long?[6];
-    public bool BudgetReviewed { get; init; }
+    public bool BudgetReviewed
+    {
+        get; init;
+    }
 }
 
 public sealed class ComparisonWriteRequest
 {
-    public long ExpectedRevision { get; init; }
+    public long ExpectedRevision
+    {
+        get; init;
+    }
     public Guid[] SelectedVariantIds { get; init; } = [];
     public string[] SelectedCriteria { get; init; } = [];
 }

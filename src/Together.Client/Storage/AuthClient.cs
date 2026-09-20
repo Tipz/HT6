@@ -4,8 +4,10 @@ using Together.Contracts;
 
 namespace Together.Client.Storage;
 
-public sealed class AuthClient(ApiHttp api)
+public sealed class AuthClient(ApiHttp api, HttpClient client)
 {
+    private PublicSettingsResponse? settings;
+
     public async Task<CurrentUserResponse?> CurrentAsync()
     {
         using var response = await api.SendAsync(new HttpRequestMessage(HttpMethod.Get, $"{ApiRoutes.Auth}/me"));
@@ -40,6 +42,16 @@ public sealed class AuthClient(ApiHttp api)
         using var response = await api.SendAsync(new HttpRequestMessage(HttpMethod.Post, $"{ApiRoutes.Auth}/logout"));
         await EnsureSuccess(response, "Не удалось завершить сеанс.");
     }
+
+    public async Task<PublicSettingsResponse> SettingsAsync()
+    {
+        settings ??= await client.GetFromJsonAsync<PublicSettingsResponse>(ApiRoutes.PublicSettings)
+            ?? new PublicSettingsResponse(false, null);
+        return settings;
+    }
+
+    public string YandexLoginUrl(string returnUrl = "/") =>
+        api.ToAbsoluteUri($"{ApiRoutes.Auth}/yandex?returnUrl={Uri.EscapeDataString(returnUrl)}").ToString();
 
     private static async Task<T> ReadAsync<T>(HttpResponseMessage response)
     {

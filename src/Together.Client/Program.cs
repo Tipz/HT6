@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using Together.Client;
 using Together.Client.Storage;
+using Together.Client.Analytics;
 using MudBlazor.Services;
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
@@ -13,4 +14,5 @@ builder.Services.AddScoped(_ => new HttpClient { BaseAddress = new Uri(string.Is
 builder.Services.AddScoped<ApiHttp>();
 builder.Services.AddScoped<AuthClient>();
 builder.Services.AddScoped<ApiTripStore>();
+builder.Services.AddScoped<AnalyticsClient>();
 await builder.Build().RunAsync();

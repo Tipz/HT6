@@ -209,9 +209,17 @@ foreach (var engine in new[] { playwright.Chromium, playwright.Firefox })
     await Case("example-data", async page =>
     {
         await Seed(page, Fixtures.Create());
-        await page.GetByRole(AriaRole.Button, new() { Name = "Добавить пример", Exact = true }).ClickAsync();
+        await page.GetByRole(AriaRole.Button, new()
+        {
+            Name = "Добавить пример",
+            Exact = true
+        }).ClickAsync();
         await Expect(page.Locator(".variant-card")).ToHaveCountAsync(3);
-        await Expect(page.GetByRole(AriaRole.Button, new() { Name = "Добавить пример", Exact = true })).ToHaveCountAsync(0);
+        await Expect(page.GetByRole(AriaRole.Button, new()
+        {
+            Name = "Добавить пример",
+            Exact = true
+        })).ToHaveCountAsync(0);
         await page.ReloadAsync();
         await page.Locator("#trip-select").SelectOptionAsync(new SelectOptionValue { Label = ExampleData.TripName });
         await Expect(page.Locator(".variant-card")).ToHaveCountAsync(3);

@@ -27,7 +27,7 @@ public sealed class TripsApiTests(TogetherApiFactory factory) : IClassFixture<To
             Adults = 2,
             ChildAges = [4]
         };
-        using var createdResponse = await owner.PostAsJsonAsync(ApiRoutes.Trips, request);
+        using var createdResponse = await SendWithAntiforgery(owner, HttpMethod.Post, ApiRoutes.Trips, request);
         Assert.Equal(HttpStatusCode.Created, createdResponse.StatusCode);
         var created = await createdResponse.Content.ReadFromJsonAsync<TripResponse>();
         Assert.NotNull(created);
@@ -49,15 +49,16 @@ public sealed class TripsApiTests(TogetherApiFactory factory) : IClassFixture<To
             DistanceTarget = "море",
             Expenses = [100_000, 0, null, 25_000, null, 5_000]
         };
-        using var variantResponse = await owner.PostAsJsonAsync(
-            $"{ApiRoutes.Trips}/{created.Id}/variants", variantRequest);
+        using var variantResponse = await SendWithAntiforgery(
+            owner, HttpMethod.Post, $"{ApiRoutes.Trips}/{created.Id}/variants", variantRequest);
         Assert.Equal(HttpStatusCode.Created, variantResponse.StatusCode);
         var withVariant = await variantResponse.Content.ReadFromJsonAsync<TripResponse>();
         Assert.NotNull(withVariant);
         Assert.Equal(2, withVariant.Revision);
         Assert.Equal(variantRequest.Expenses, Assert.Single(withVariant.Variants).Expenses);
 
-        using var conflictResponse = await owner.PutAsJsonAsync($"{ApiRoutes.Trips}/{created.Id}", request);
+        using var conflictResponse = await SendWithAntiforgery(
+            owner, HttpMethod.Put, $"{ApiRoutes.Trips}/{created.Id}", request);
         Assert.Equal(HttpStatusCode.Conflict, conflictResponse.StatusCode);
 
         using var other = factory.CreateClient();
@@ -71,16 +72,55 @@ public sealed class TripsApiTests(TogetherApiFactory factory) : IClassFixture<To
     {
         using var client = factory.CreateClient();
         await RegisterAndLogin(client, $"validation-{Guid.NewGuid():N}@example.test");
-        using var response = await client.PostAsJsonAsync(ApiRoutes.Trips, new TripWriteRequest());
+        using var response = await SendWithAntiforgery(client, HttpMethod.Post, ApiRoutes.Trips, new TripWriteRequest());
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task StateChangingRequest_RequiresValidAntiforgeryToken()
+    {
+        using var client = factory.CreateClient();
+        using var missing = await client.PostAsJsonAsync(
+            $"{ApiRoutes.Auth}/register",
+            new
+            {
+                email = $"csrf-{Guid.NewGuid():N}@example.test",
+                password = "correct horse battery staple"
+            });
+        Assert.Equal(HttpStatusCode.BadRequest, missing.StatusCode);
+
+        using var invalidRequest = new HttpRequestMessage(HttpMethod.Post, $"{ApiRoutes.Auth}/register")
+        {
+            Content = JsonContent.Create(new { email = $"csrf-{Guid.NewGuid():N}@example.test", password = "correct horse battery staple" })
+        };
+        invalidRequest.Headers.Add("X-XSRF-TOKEN", "invalid");
+        using var invalid = await client.SendAsync(invalidRequest);
+        Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
     }
 
     private static async Task RegisterAndLogin(HttpClient client, string email)
     {
-        const string password = "12345";
-        using var register = await client.PostAsJsonAsync($"{ApiRoutes.Auth}/register", new { email, password });
+        const string password = "correct horse battery staple";
+        using var register = await SendWithAntiforgery(client, HttpMethod.Post, $"{ApiRoutes.Auth}/register", new
+        {
+            email,
+            password
+        });
         Assert.Equal(HttpStatusCode.OK, register.StatusCode);
-        using var login = await client.PostAsJsonAsync($"{ApiRoutes.Auth}/login?useCookies=true", new { email, password });
+        using var login = await SendWithAntiforgery(client, HttpMethod.Post, $"{ApiRoutes.Auth}/login?useCookies=true", new
+        {
+            email,
+            password
+        });
         Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+    }
+
+    internal static async Task<HttpResponseMessage> SendWithAntiforgery<T>(HttpClient client, HttpMethod method, string uri, T value)
+    {
+        var token = await client.GetFromJsonAsync<AntiforgeryTokenResponse>(ApiRoutes.Antiforgery);
+        Assert.NotNull(token);
+        var request = new HttpRequestMessage(method, uri) { Content = JsonContent.Create(value) };
+        request.Headers.Add("X-XSRF-TOKEN", token.Token);
+        return await client.SendAsync(request);
     }
 }

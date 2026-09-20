@@ -42,12 +42,17 @@ public sealed class ApiTripStore(ApiHttp api)
 
         using (response)
         {
-            if (response.StatusCode == HttpStatusCode.Unauthorized) throw new AuthenticationRequiredException();
-            if (response.StatusCode == HttpStatusCode.Conflict) return "conflict";
-            if (response.StatusCode == HttpStatusCode.BadRequest) return "invalid";
-            if (!response.IsSuccessStatusCode) return "write";
+            if (response.StatusCode == HttpStatusCode.Unauthorized)
+                throw new AuthenticationRequiredException();
+            if (response.StatusCode == HttpStatusCode.Conflict)
+                return "conflict";
+            if (response.StatusCode == HttpStatusCode.BadRequest)
+                return "invalid";
+            if (!response.IsSuccessStatusCode)
+                return "write";
             var saved = await response.Content.ReadFromJsonAsync<TripResponse>();
-            if (saved is null) return "write";
+            if (saved is null)
+                return "write";
             Replace(next, ToCore(saved));
             next.Revision = expectedRevision + 1;
             snapshot = next.Copy();
@@ -62,14 +67,17 @@ public sealed class ApiTripStore(ApiHttp api)
             return response;
         var saved = await response.Content.ReadFromJsonAsync<TripResponse>();
         response.Dispose();
-        if (saved is null) return new HttpResponseMessage(HttpStatusCode.BadGateway);
+        if (saved is null)
+            return new HttpResponseMessage(HttpStatusCode.BadGateway);
         foreach (var variant in trip.Variants.OrderBy(x => x.CreatedAt))
         {
             response = await Post($"{ApiRoutes.Trips}/{trip.Id}/variants", ToRequest(variant, saved.Revision, 0));
-            if (!response.IsSuccessStatusCode) return response;
+            if (!response.IsSuccessStatusCode)
+                return response;
             saved = await response.Content.ReadFromJsonAsync<TripResponse>();
             response.Dispose();
-            if (saved is null) return new HttpResponseMessage(HttpStatusCode.BadGateway);
+            if (saved is null)
+                return new HttpResponseMessage(HttpStatusCode.BadGateway);
         }
         if (trip.SelectedVariantIds.Count > 0 || !trip.SelectedCriteria.SequenceEqual(saved.SelectedCriteria))
         {
@@ -79,10 +87,12 @@ public sealed class ApiTripStore(ApiHttp api)
                 SelectedVariantIds = [.. trip.SelectedVariantIds],
                 SelectedCriteria = [.. trip.SelectedCriteria]
             });
-            if (!response.IsSuccessStatusCode) return response;
+            if (!response.IsSuccessStatusCode)
+                return response;
             saved = await response.Content.ReadFromJsonAsync<TripResponse>();
             response.Dispose();
-            if (saved is null) return new HttpResponseMessage(HttpStatusCode.BadGateway);
+            if (saved is null)
+                return new HttpResponseMessage(HttpStatusCode.BadGateway);
         }
         return new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(saved) };
     }
@@ -196,6 +206,9 @@ public sealed class ApiTripStore(ApiHttp api)
     private static void Replace(Workspace workspace, Trip trip)
     {
         var index = workspace.Trips.FindIndex(x => x.Id == trip.Id);
-        if (index < 0) workspace.Trips.Add(trip); else workspace.Trips[index] = trip;
+        if (index < 0)
+            workspace.Trips.Add(trip);
+        else
+            workspace.Trips[index] = trip;
     }
 }

@@ -9,10 +9,17 @@ public static class StartupSmoke
 {
     public static async Task<int> RunAsync(IPlaywright playwright, string baseUrl, string evidence, bool beforeFix)
     {
-        await using var browser = await playwright.Chromium.LaunchAsync(new() { Headless = true });
+        await using var browser = await playwright.Chromium.LaunchAsync(new()
+        {
+            Headless = true
+        });
         await using var context = await browser.NewContextAsync(new()
         {
-            ViewportSize = new() { Width = 1440, Height = 1000 },
+            ViewportSize = new()
+            {
+                Width = 1440,
+                Height = 1000
+            },
             Locale = "ru-RU"
         });
         var page = await context.NewPageAsync();
@@ -25,7 +32,8 @@ public static class StartupSmoke
         page.Response += (_, response) =>
         {
             statuses[response.Url] = response.Status;
-            if (response.Status >= 400) failures.Enqueue($"{response.Status} {response.Url}");
+            if (response.Status >= 400)
+                failures.Enqueue($"{response.Status} {response.Url}");
         };
         page.RequestFailed += (_, request) =>
         {
@@ -56,16 +64,35 @@ public static class StartupSmoke
             {
                 var url = new Uri(new Uri(baseUrl.TrimEnd('/') + "/"), path);
                 using var response = await http.GetAsync(url);
-                modules.Add(new { url = url.ToString(), status = (int)response.StatusCode });
-                if (!response.IsSuccessStatusCode) failures.Enqueue($"{(int)response.StatusCode} {url}");
+                modules.Add(new
+                {
+                    url = url.ToString(),
+                    status = (int)response.StatusCode
+                });
+                if (!response.IsSuccessStatusCode)
+                    failures.Enqueue($"{(int)response.StatusCode} {url}");
             }
-            await Expect(page.GetByRole(AriaRole.Heading, new() { Name = "Все варианты. Все расходы." }))
-                .ToBeVisibleAsync(new() { Timeout = 15000 });
+            await Expect(page.GetByRole(AriaRole.Heading, new()
+            {
+                Name = "Все варианты. Все расходы."
+            }))
+                .ToBeVisibleAsync(new()
+                {
+                    Timeout = 15000
+                });
             await Expect(page.Locator(".variant-card")).ToHaveCountAsync(3);
             await Expect(page.Locator("#comparison table")).ToBeVisibleAsync();
-            await page.GetByRole(AriaRole.Button, new() { Name = "Новая поездка", Exact = true }).ClickAsync();
+            await page.GetByRole(AriaRole.Button, new()
+            {
+                Name = "Новая поездка",
+                Exact = true
+            }).ClickAsync();
             await Expect(page.Locator("dialog")).ToBeVisibleAsync();
-            await page.GetByRole(AriaRole.Button, new() { Name = "Закрыть форму", Exact = true }).ClickAsync();
+            await page.GetByRole(AriaRole.Button, new()
+            {
+                Name = "Закрыть форму",
+                Exact = true
+            }).ClickAsync();
             await Expect(page.Locator("dialog")).ToHaveCountAsync(0);
             passed = errors.IsEmpty && failures.IsEmpty;
         }
@@ -74,7 +101,11 @@ public static class StartupSmoke
             assertionError = ex.Message;
         }
         var phase = beforeFix ? "before" : "after";
-        await page.ScreenshotAsync(new() { Path = Path.Combine(evidence, $"startup-{phase}.png"), FullPage = true });
+        await page.ScreenshotAsync(new()
+        {
+            Path = Path.Combine(evidence, $"startup-{phase}.png"),
+            FullPage = true
+        });
         await File.WriteAllTextAsync(Path.Combine(evidence, $"startup-{phase}.json"), JsonSerializer.Serialize(new
         {
             baseUrl,

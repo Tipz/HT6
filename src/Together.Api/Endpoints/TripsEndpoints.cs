@@ -256,34 +256,48 @@ public static class TripsEndpoints
     private static Dictionary<string, string[]> ValidateTrip(TripWriteRequest request)
     {
         var errors = new Dictionary<string, string[]>();
-        if (!DataValidation.Text(request.Name?.Trim(), 100)) errors["name"] = ["Укажите название, от 1 до 100 символов."];
-        if (request.StartDate == default) errors["startDate"] = ["Укажите дату начала."];
-        if (request.EndDate <= request.StartDate) errors["endDate"] = ["Окончание должно быть позже начала."];
-        if (request.Adults is < 1 or > 10) errors["adults"] = ["Укажите число от 1 до 10."];
+        if (!DataValidation.Text(request.Name?.Trim(), 100))
+            errors["name"] = ["Укажите название, от 1 до 100 символов."];
+        if (request.StartDate == default)
+            errors["startDate"] = ["Укажите дату начала."];
+        if (request.EndDate <= request.StartDate)
+            errors["endDate"] = ["Окончание должно быть позже начала."];
+        if (request.Adults is < 1 or > 10)
+            errors["adults"] = ["Укажите число от 1 до 10."];
         if (request.ChildAges is null || request.ChildAges.Length is < 1 or > 10 || request.ChildAges.Any(x => x is < 0 or > 17))
             errors["childAges"] = ["Нужно от 1 до 10 возрастов от 0 до 17 лет."];
-        if (request.ExpectedRevision < 0) errors["expectedRevision"] = ["Revision не может быть отрицательным."];
+        if (request.ExpectedRevision < 0)
+            errors["expectedRevision"] = ["Revision не может быть отрицательным."];
         return errors;
     }
 
     private static Dictionary<string, string[]> ValidateVariant(VariantWriteRequest request)
     {
         var errors = new Dictionary<string, string[]>();
-        if (!DataValidation.Text(request.Name?.Trim(), 150)) errors["name"] = ["Обязательное поле, до 150 символов."];
-        if (!DataValidation.Text(request.Destination?.Trim(), 150)) errors["destination"] = ["Обязательное поле, до 150 символов."];
-        if (!DataValidation.Text(request.Accommodation?.Trim(), 150)) errors["accommodation"] = ["Обязательное поле, до 150 символов."];
-        if (!DataValidation.Url(request.SourceUrl?.Trim())) errors["sourceUrl"] = ["Укажите абсолютную ссылку http или https."];
-        if (!DataValidation.Text(request.RoadDescription, 2000, false)) errors["roadDescription"] = ["Не более 2000 символов."];
-        if (!DataValidation.Text(request.Notes, 2000, false)) errors["notes"] = ["Не более 2000 символов."];
-        if (request.TravelMinutes is < 0 or > 100000) errors["travelMinutes"] = ["Укажите значение от 0 до 100 000."];
-        if (request.Transfers is < 0 or > 20) errors["transfers"] = ["Укажите значение от 0 до 20."];
+        if (!DataValidation.Text(request.Name?.Trim(), 150))
+            errors["name"] = ["Обязательное поле, до 150 символов."];
+        if (!DataValidation.Text(request.Destination?.Trim(), 150))
+            errors["destination"] = ["Обязательное поле, до 150 символов."];
+        if (!DataValidation.Text(request.Accommodation?.Trim(), 150))
+            errors["accommodation"] = ["Обязательное поле, до 150 символов."];
+        if (!DataValidation.Url(request.SourceUrl?.Trim()))
+            errors["sourceUrl"] = ["Укажите абсолютную ссылку http или https."];
+        if (!DataValidation.Text(request.RoadDescription, 2000, false))
+            errors["roadDescription"] = ["Не более 2000 символов."];
+        if (!DataValidation.Text(request.Notes, 2000, false))
+            errors["notes"] = ["Не более 2000 символов."];
+        if (request.TravelMinutes is < 0 or > 100000)
+            errors["travelMinutes"] = ["Укажите значение от 0 до 100 000."];
+        if (request.Transfers is < 0 or > 20)
+            errors["transfers"] = ["Укажите значение от 0 до 20."];
         if (request.DistanceMeters is < 0 or > 1000000 || !DataValidation.Text(request.DistanceTarget, 100, request.DistanceMeters.HasValue) || (request.DistanceMeters is null && request.DistanceTarget.Length > 0))
             errors["distance"] = ["Расстояние и цель должны быть заполнены вместе."];
         if (new[] { request.Kitchen, request.Crib, request.Playground }.Any(x => x is not ("yes" or "no" or "unknown")))
             errors["amenities"] = ["Допустимы yes, no или unknown."];
         if (request.Expenses is null || request.Expenses.Length != Catalog.ExpenseKeys.Length || request.Expenses.Any(x => x is < 0 or > 10000000000L))
             errors["expenses"] = ["Передайте шесть сумм от 0 до 100 000 000 ₽ либо null."];
-        if (request.ExpectedRevision < 0 || request.ExpectedTripRevision < 0) errors["revision"] = ["Revision не может быть отрицательным."];
+        if (request.ExpectedRevision < 0 || request.ExpectedTripRevision < 0)
+            errors["revision"] = ["Revision не может быть отрицательным."];
         return errors;
     }
 
@@ -312,7 +326,8 @@ public static class TripsEndpoints
         variant.Playground = request.Playground;
         variant.DistanceMeters = request.DistanceMeters;
         variant.DistanceTarget = request.DistanceTarget.Trim();
-        if (request.BudgetReviewed) variant.NeedsBudgetReview = false;
+        if (request.BudgetReviewed)
+            variant.NeedsBudgetReview = false;
     }
 
     private static void AddChildren(TripEntity trip, int[] ages)

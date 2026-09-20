@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
 using Together.Client.Storage;
+using Together.Client.Analytics;
 using Together.Core;
 using TripVariant = Together.Core.Variant;
 
@@ -13,6 +14,7 @@ public partial class Home
     [Inject] public NavigationManager Navigation { get; set; } = default!;
     [Inject] public AuthClient Auth { get; set; } = default!;
     [Inject] public BrowserStore LegacyStore { get; set; } = default!;
+    [Inject] public AnalyticsClient Analytics { get; set; } = default!;
     [Inject] public IJSRuntime Js { get; set; } = default!;
     private Workspace data = new();
     private Guid? currentId;
@@ -179,6 +181,7 @@ public partial class Home
     {
         if (draft.Validate().Count > 0)
             return;
+        var created = editingTrip is null;
         var id = editingTrip?.Id ?? Guid.NewGuid();
         retry = () => SaveTrip(draft);
         if (await Commit(next =>
@@ -194,6 +197,8 @@ public partial class Home
         {
             currentId = id;
             await CloseEditor();
+            if (created)
+                await Analytics.TripCreatedAsync();
         }
     }
     private async Task SaveVariant(VariantDraft draft)
@@ -289,7 +294,10 @@ public partial class Home
     }
     private async Task Logout()
     {
-        try { await Auth.LogoutAsync(); }
+        try
+        {
+            await Auth.LogoutAsync();
+        }
         finally { Navigation.NavigateTo("/login", forceLoad: true); }
     }
     private async Task ReloadCurrent()
