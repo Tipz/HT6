@@ -32,6 +32,11 @@ services:
       ConnectionStrings__Together: Host=database;Port=5432;Database=${POSTGRES_DB:-together};Username=${POSTGRES_USER:-together};Password=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
       DataProtection__KeysPath: /app/data-protection
       Authentication__SecureCookies: ${SECURE_COOKIES:-true}
+      Authentication__Yandex__ClientId: ${YANDEX_CLIENT_ID:-}
+      Authentication__Yandex__ClientSecret: ${YANDEX_CLIENT_SECRET:-}
+      YandexMetrika__CounterId: ${YANDEX_METRIKA_COUNTER_ID:-}
+      ForwardedHeaders__KnownProxies__0: ${TRUSTED_PROXY_IP:-}
+      Security__UseHttpsRedirection: ${USE_HTTPS_REDIRECTION:-false}
     ports:
       - "${APP_PORT:-8080}:8080"
     depends_on:
@@ -45,6 +50,12 @@ services:
       - /tmp
     volumes:
       - together-data-protection:/app/data-protection
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "--show-error", "http://127.0.0.1:8080/health"]
+      interval: 10s
+      timeout: 5s
+      start_period: 15s
+      retries: 6
 
 volumes:
   together-postgres:

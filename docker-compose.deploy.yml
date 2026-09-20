@@ -17,9 +17,14 @@ services:
       - together-postgres:/var/lib/postgresql/data
     restart: unless-stopped
     stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
 
   migrate:
-    image: ${TOGETHER_IMAGE:-ghcr.io/tipz/ht5:latest}
+    image: ${TOGETHER_IMAGE:?Set TOGETHER_IMAGE to ghcr.io/tipz/ht5@sha256:...}
     pull_policy: always
     command: ["--migrate"]
     environment:
@@ -32,15 +37,25 @@ services:
     tmpfs:
       - /tmp
     restart: "no"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "2"
 
   app:
-    image: ${TOGETHER_IMAGE:-ghcr.io/tipz/ht5:latest}
+    image: ${TOGETHER_IMAGE:?Set TOGETHER_IMAGE to ghcr.io/tipz/ht5@sha256:...}
     pull_policy: always
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ConnectionStrings__Together: Host=database;Port=5432;Database=${POSTGRES_DB:-together};Username=${POSTGRES_USER:-together};Password=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.deploy}
       DataProtection__KeysPath: /app/data-protection
       Authentication__SecureCookies: ${SECURE_COOKIES:-true}
+      Authentication__Yandex__ClientId: ${YANDEX_CLIENT_ID:-}
+      Authentication__Yandex__ClientSecret: ${YANDEX_CLIENT_SECRET:-}
+      YandexMetrika__CounterId: ${YANDEX_METRIKA_COUNTER_ID:-}
+      ForwardedHeaders__KnownProxies__0: ${TRUSTED_PROXY_IP:-}
+      Security__UseHttpsRedirection: ${USE_HTTPS_REDIRECTION:-false}
     ports:
       - "${APP_BIND_ADDRESS:-127.0.0.1}:${APP_PORT:-8080}:8080"
     depends_on:
@@ -57,6 +72,17 @@ services:
     stop_grace_period: 30s
     security_opt:
       - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "--show-error", "http://127.0.0.1:8080/health"]
+      interval: 10s
+      timeout: 5s
+      start_period: 15s
+      retries: 6
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
 
 volumes:
   together-postgres:

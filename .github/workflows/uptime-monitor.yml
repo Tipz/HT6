@@ -1,0 +1,37 @@
+name: Production uptime monitor
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+    inputs:
+      simulate_failure:
+        description: 'Fail deliberately to test GitHub Actions notifications'
+        required: false
+        default: false
+        type: boolean
+
+permissions: {}
+
+concurrency:
+  group: production-uptime-monitor
+  cancel-in-progress: true
+
+jobs:
+  health:
+    name: Check production liveness
+    runs-on: [self-hosted, production, together]
+    timeout-minutes: 5
+    env:
+      APP_URL: ${{ vars.APP_URL }}
+    steps:
+      - name: Check liveness endpoint
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          : "${APP_URL:?Configure the repository APP_URL variable}"
+          if [[ "${{ inputs.simulate_failure || false }}" == "true" ]]; then
+            echo "Deliberate monitoring failure for notification testing" >&2
+            exit 1
+          fi
+          curl --fail --silent --show-error --max-time 15 "$APP_URL/health" > /dev/null

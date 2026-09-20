@@ -1,52 +1,321 @@
-name: CI
+name: CI, publish and deploy
 
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
     branches: [main]
   workflow_dispatch:
 
-permissions:
-  contents: read
+permissions: {}
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: pipeline-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  IMAGE_NAME: ghcr.io/tipz/ht5
+
 jobs:
-  build-and-test:
-    name: Build and test
+  quality:
+    name: Format and dependency audit
     runs-on: ubuntu-latest
     timeout-minutes: 15
-
+    permissions:
+      contents: read
     steps:
       - name: Check out repository
-        uses: actions/checkout@v7
-
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Set up .NET
-        uses: actions/setup-dotnet@v6
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
           global-json-file: global.json
           cache: true
           cache-dependency-path: '**/packages.lock.json'
-
-      - name: Restore dependencies
-        run: dotnet restore Together.slnx
-
-      - name: Build
-        run: dotnet build Together.slnx --configuration Release --no-restore
-
-      - name: Run automated tests
+      - name: Restore locked dependencies
+        run: dotnet restore Together.slnx --locked-mode
+      - name: Verify formatting
+        run: dotnet format Together.slnx --verify-no-changes --no-restore
+      - name: Audit direct and transitive NuGet dependencies
+        shell: pwsh
         run: |
-          dotnet test tests/Together.Tests/Together.Tests.csproj --configuration Release --no-build --no-restore --logger "trx;LogFileName=test-results.trx" --results-directory TestResults/Core
-          dotnet test tests/Together.Api.Tests/Together.Api.Tests.csproj --configuration Release --no-build --no-restore --logger "trx;LogFileName=test-results.trx" --results-directory TestResults/Api
+          $report = dotnet package list --project Together.slnx --include-transitive --vulnerable --format json
+          $report
+          if ($report -match '"severity"\s*:') {
+            throw 'NuGet audit found a vulnerable package. Review the JSON report above.'
+          }
 
+  build_test:
+    name: Release build and xUnit
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Set up .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: '**/packages.lock.json'
+      - name: Restore locked dependencies
+        run: dotnet restore Together.slnx --locked-mode
+      - name: Build without compiler warnings
+        run: dotnet build Together.slnx --configuration Release --no-restore
+      - name: Run Core and UI tests
+        run: dotnet test tests/Together.Tests/Together.Tests.csproj --configuration Release --no-build --no-restore --logger "trx;LogFileName=test-results.trx" --results-directory TestResults/Core
+      - name: Run API integration tests
+        run: dotnet test tests/Together.Api.Tests/Together.Api.Tests.csproj --configuration Release --no-build --no-restore --logger "trx;LogFileName=test-results.trx" --results-directory TestResults/Api
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: test-results
           path: TestResults
           if-no-files-found: warn
           retention-days: 7
+
+  dependency_review:
+    name: Dependency review (when GitHub supports it)
+    if: github.event_name == 'pull_request'
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Review dependency changes
+        uses: actions/dependency-review-action@40c09b7dc99638e5ddb0bfd91c1673effc064d8a # v4.8.1
+        with:
+          fail-on-severity: moderate
+
+  codeql:
+    name: CodeQL (when GitHub supports it)
+    needs: quality
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@1c5b675653bb5c22dbe9b12b556ec555138e09fd # v4
+        with:
+          languages: csharp,javascript-typescript
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@1c5b675653bb5c22dbe9b12b556ec555138e09fd # v4
+      - name: Analyze
+        uses: github/codeql-action/analyze@1c5b675653bb5c22dbe9b12b556ec555138e09fd # v4
+
+  backend_smoke:
+    name: Docker Compose and Chromium
+    needs: build_test
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    permissions:
+      contents: read
+    env:
+      APP_PORT: 8080
+      POSTGRES_PASSWORD: ci-only-password
+      SECURE_COOKIES: 'false'
+      TOGETHER_IMAGE: ghcr.io/tipz/ht5:ci-placeholder
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Set up .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: '**/packages.lock.json'
+      - name: Restore and build browser test
+        run: |
+          dotnet restore Together.slnx --locked-mode
+          dotnet build Together.slnx --configuration Release --no-restore
+      - name: Validate deployment Compose file
+        run: docker compose --file docker-compose.deploy.yml config --quiet
+      - name: Install Chromium
+        shell: pwsh
+        run: tests/Together.BrowserTests/bin/Release/net10.0/playwright.ps1 install --with-deps chromium
+      - name: Start application stack and wait for readiness
+        shell: bash
+        run: |
+          docker compose up --build --detach
+          for attempt in {1..90}; do
+            if curl --fail --silent --show-error http://localhost:8080/health/ready > /dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose ps
+          docker compose logs --no-color
+          exit 1
+      - name: Run current backend browser smoke
+        env:
+          APP_URL: http://localhost:8080
+        run: dotnet run --project tests/Together.BrowserTests --configuration Release --no-build -- --backend-smoke
+      - name: Collect container logs
+        if: always()
+        shell: bash
+        run: docker compose logs --no-color > "$RUNNER_TEMP/docker-compose.log" 2>&1
+      - name: Upload browser evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: browser-evidence
+          path: |
+            docs/evidence
+            ${{ runner.temp }}/docker-compose.log
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Stop application stack
+        if: always()
+        run: docker compose down --volumes
+
+  publish:
+    name: Publish immutable multi-platform image
+    needs: backend_smoke
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image_ref: ${{ steps.reference.outputs.value }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Generate image metadata
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.description=Together trip planning application
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=branch
+            type=ref,event=tag
+            type=sha,format=long
+      - name: Build and push image
+        id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: mode=min
+          sbom: true
+      - name: Export immutable image reference
+        id: reference
+        shell: bash
+        run: echo "value=${IMAGE_NAME}@${{ steps.build.outputs.digest }}" >> "$GITHUB_OUTPUT"
+      - name: Smoke test published digest
+        shell: bash
+        env:
+          TOGETHER_IMAGE: ${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
+          POSTGRES_PASSWORD: ci-only-password
+          SECURE_COOKIES: 'false'
+        run: |
+          docker compose --file docker-compose.deploy.yml up --detach
+          for attempt in {1..90}; do
+            if curl --fail --silent --show-error http://127.0.0.1:8080/health/ready > /dev/null; then
+              docker compose --file docker-compose.deploy.yml ps
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose --file docker-compose.deploy.yml ps
+          docker compose --file docker-compose.deploy.yml logs --no-color
+          exit 1
+      - name: Stop published-image smoke stack
+        if: always()
+        env:
+          TOGETHER_IMAGE: ${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
+          POSTGRES_PASSWORD: ci-only-password
+        run: docker compose --file docker-compose.deploy.yml down --volumes
+
+  deploy:
+    name: Deploy production digest and smoke
+    needs: publish
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, production, together]
+    environment: production
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: read
+    env:
+      DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
+      APP_URL: ${{ vars.APP_URL }}
+      TOGETHER_IMAGE: ${{ needs.publish.outputs.image_ref }}
+      YANDEX_CLIENT_ID: ${{ vars.YANDEX_CLIENT_ID }}
+      YANDEX_CLIENT_SECRET: ${{ secrets.YANDEX_CLIENT_SECRET }}
+      YANDEX_METRIKA_COUNTER_ID: ${{ vars.YANDEX_METRIKA_COUNTER_ID }}
+    steps:
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Validate configuration, migrate and update app
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          : "${DEPLOY_PATH:?Configure the production DEPLOY_PATH variable}"
+          : "${APP_URL:?Configure the production APP_URL variable}"
+          : "${TOGETHER_IMAGE:?Publish did not provide an immutable image reference}"
+          case "$TOGETHER_IMAGE" in
+            ghcr.io/tipz/ht5@sha256:*) ;;
+            *) echo "Refusing a non-immutable or unexpected image reference" >&2; exit 1 ;;
+          esac
+          cd "$DEPLOY_PATH"
+          compose=(docker compose --env-file .env.deploy --file docker-compose.deploy.yml)
+          trap '${compose[@]} ps; ${compose[@]} logs --no-color --tail 200 app' ERR
+          "${compose[@]}" config --quiet
+          "${compose[@]}" pull app migrate
+          "${compose[@]}" up --detach --wait database
+          "${compose[@]}" run --rm migrate
+          "${compose[@]}" up --detach --no-deps app
+      - name: Wait for readiness and run production smoke
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          for attempt in {1..60}; do
+            if curl --fail --silent --show-error "$APP_URL/health/ready" > /dev/null; then
+              curl --fail --silent --show-error "$APP_URL/" | grep --fixed-strings '<title>Вместе в путь'
+              exit 0
+            fi
+            sleep 2
+          done
+          cd "$DEPLOY_PATH"
+          docker compose --env-file .env.deploy --file docker-compose.deploy.yml ps
+          docker compose --env-file .env.deploy --file docker-compose.deploy.yml logs --no-color --tail 200 app
+          exit 1
