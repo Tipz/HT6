@@ -1,4 +1,24 @@
-FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0.303 AS build
+FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/aspnet:10.0.11 AS build
+ARG BUILDARCH
+USER root
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && case "$BUILDARCH" in \
+         amd64) sdk_arch=x64 ;; \
+         arm64) sdk_arch=arm64 ;; \
+         *) echo "Unsupported build architecture: $BUILDARCH" >&2; exit 1 ;; \
+       esac \
+    && sdk_archive="dotnet-sdk-10.0.303-linux-${sdk_arch}.tar.gz" \
+    && cd /tmp \
+    && curl --fail --show-error --location --remote-name \
+       "https://builds.dotnet.microsoft.com/dotnet/Sdk/10.0.303/${sdk_archive}" \
+    && curl --fail --show-error --location --remote-name \
+       "https://builds.dotnet.microsoft.com/dotnet/Sdk/10.0.303/${sdk_archive}.sha512" \
+    && sha512sum --check "${sdk_archive}.sha512" \
+    && tar --gzip --extract --file "$sdk_archive" --directory /usr/share/dotnet \
+    && rm "$sdk_archive" "${sdk_archive}.sha512" \
+    && test "$(dotnet --version)" = "10.0.303"
 WORKDIR /src
 
 COPY global.json Directory.Build.props Together.slnx ./
