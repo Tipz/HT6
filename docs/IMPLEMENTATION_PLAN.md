@@ -1,13 +1,11 @@
 # План реализации домашнего задания № 6
 
-Статус: принят к реализации.  
+Статус: реализован локально; внешняя настройка и production-проверки Pending.
 Дата анализа: 20 сентября 2026 года.
 
-Этот документ описывает план настройки CI/CD, аудита безопасности, OAuth2,
-аналитики, мониторинга и структурированного логирования для проекта «Вместе в
-путь». Он не является отчётом о выполненной реализации. Фактические результаты
-должны фиксироваться в `integration_documentation.md`, `security_audit.md` и
-README только после соответствующих проверок.
+Документ сохраняет исходный план и дополнен фактическим статусом. Подтверждённые
+результаты записаны в `integration_documentation.md`, `security_audit.md`, README
+и `SUBMISSION.md`; внешние проверки не выдаются за выполненные.
 
 ## 1. Текущее состояние
 
@@ -509,3 +507,15 @@ Push в `main` автоматически обновляет production толь
   предполагаемые результаты.
 - Использование AI и ручная проверка его выводов документированы.
 - README содержит актуальные инструкции и рабочую deployment-ссылку.
+
+## 10. Фактический статус 20 сентября 2026 года
+
+Локально завершены этапы CI configuration, security hardening, fake OAuth tests,
+аналитика с consent, JSON logging и документация. Прошли format, locked restore,
+Release build, 36 unit/component tests, 15 API tests и NuGet vulnerability audit.
+
+Pending: Docker/Chromium smoke из-за отсутствия Docker CLI; GitHub workflow run,
+CodeQL/dependency review и publish без push; production deployment/monitoring без
+настроенного runner и URL; реальный Яндекс OAuth без зарегистрированного Redirect
+URI; ручная проверка Метрики без номера счётчика. Рабочая deployment-ссылка пока
+не существует и не подменена шаблоном.

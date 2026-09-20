@@ -1,7 +1,7 @@
 # Интеграции и CI/CD — домашнее задание № 6
 
-Статус документа: подготовлена исходная структура; интеграции ДЗ № 6 ещё не
-реализованы.  
+Статус документа: локальная реализация завершена; внешняя production-настройка и
+проверки отмечены `Pending`.
 Последнее обновление: 20 сентября 2026 года.
 
 Фактические результаты следует добавлять сюда только после выполнения и проверки
@@ -23,8 +23,9 @@ ASP.NET Core Identity cookie.
 - `/health` и `/health/ready`;
 - текстовые console logs ASP.NET Core.
 
-Автоматический production deployment на `192.168.1.26`, OAuth2 через Яндекс ID,
-аналитика, JSON-логи и внешний мониторинг пока не настроены.
+В репозитории реализованы OAuth2 через Яндекс ID, opt-in Яндекс Метрика,
+antiforgery, JSON-логи, связанный pipeline и deployment/monitoring workflows.
+Production runner, URL, OAuth-приложение, счётчик и alert ещё не настроены.
 
 ## 2. Принятые ограничения
 
@@ -39,13 +40,12 @@ ASP.NET Core Identity cookie.
 
 ## 3. CI/CD
 
-### Текущее состояние
+### Реализованное состояние
 
 | Workflow | Фактическая функция | Ограничение |
 | --- | --- | --- |
-| `.github/workflows/ci.yml` | Restore, Release build, Core/UI и API tests | Слушает `master`, тогда как рабочая ветка — `main` |
-| `.github/workflows/browser-tests.yml` | Compose, PostgreSQL, Chromium backend smoke | Не является обязательным predecessor publish job |
-| `.github/workflows/publish-container.yml` | Buildx, GHCR, SBOM и smoke digest | Публикация не выполняет deployment на внешний стенд |
+| `.github/workflows/ci.yml` | Format/NuGet audit → build/xUnit → Compose/Chromium → publish digest → deploy/smoke | Внешний workflow run Pending |
+| `.github/workflows/uptime-monitor.yml` | `/health` каждые 15 минут и ручная имитация отказа | Runner/APP_URL/alert test Pending |
 
 ### Целевая последовательность
 
@@ -56,7 +56,7 @@ format/security → build/tests → backend smoke → publish → deploy → pro
 Pull request выполняет только проверки. Push в `main` после успешных проверок
 публикует immutable image и разворачивает его в GitHub Environment `production`.
 
-### Планируемые GitHub secrets и variables
+### GitHub secrets и variables без значений
 
 Deployment target и image name зафиксированы. Секреты хранятся в GitHub
 Environment `production` либо только на production host.
@@ -65,16 +65,17 @@ Environment `production` либо только на production host.
 | --- | --- | --- |
 | `DEPLOY_PATH` | Environment variable | Каталог deployment Compose на `192.168.1.26` |
 | `APP_URL` | Environment variable | Production URL для smoke после выбора схемы и порта |
-| `YANDEX_CLIENT_ID` | Environment secret | Client ID production-приложения Яндекс OAuth |
+| `YANDEX_CLIENT_ID` | Environment variable | Client ID production-приложения Яндекс OAuth |
 | `YANDEX_CLIENT_SECRET` | Environment secret | Client Secret production-приложения Яндекс OAuth |
+| `YANDEX_METRIKA_COUNTER_ID` | Environment variable | Публичный номер счётчика |
 
-Deployment job отображает `YANDEX_CLIENT_ID` и `YANDEX_CLIENT_SECRET` только в
-server-side переменные `Authentication__Yandex__ClientId` и
-`Authentication__Yandex__ClientSecret`.
+Deployment job передаёт `YANDEX_CLIENT_ID` и `YANDEX_CLIENT_SECRET` только как
+server-side environment values, которые Compose отображает в
+`Authentication__Yandex__ClientId` и `Authentication__Yandex__ClientSecret`.
 
-Пароль PostgreSQL и OAuth client secret должны оставаться на deployment host либо
-в GitHub Environment `production`. Они не должны передаваться в Blazor
-configuration или попадать в вывод `docker compose config`.
+Пароль PostgreSQL остаётся в `.env.deploy` на deployment host, OAuth client secret
+— в GitHub Environment `production`. Они не передаются в Blazor configuration и
+не печатаются командой `docker compose config --quiet`.
 
 ### Deployment
 
@@ -86,7 +87,7 @@ self-hosted GitHub Actions runner на этой машине получает di
 только deployment job после push в `main` и никогда не запускает код из pull
 request.
 
-До реализации необходимо определить:
+До первого deploy необходимо определить:
 
 - схему и порт production URL на `192.168.1.26`;
 - TLS/reverse proxy либо явно зафиксированный режим изолированного LAN-стенда;
@@ -94,12 +95,37 @@ request.
 - доступ Docker host к `ghcr.io/tipz/ht5`, если package является приватным;
 - backup и rollback procedure.
 
+### Логи и rollback на Docker host
+
+Production Compose использует Docker `json-file` с rotation: приложение и БД —
+до пяти файлов по 10 MiB, migration job — до двух. Просмотр без раскрытия env:
+
+```bash
+cd "$DEPLOY_PATH"
+docker compose --env-file .env.deploy --file docker-compose.deploy.yml logs --since 1h --tail 200 app
+```
+
+Ручной rollback не удаляет volumes. Возьмите предыдущий успешный digest из
+GitHub run/package history, задайте его только для команды и обновите приложение:
+
+```bash
+export TOGETHER_IMAGE='ghcr.io/tipz/ht5@sha256:<previous-digest>'
+docker compose --env-file .env.deploy --file docker-compose.deploy.yml pull app
+docker compose --env-file .env.deploy --file docker-compose.deploy.yml up -d --no-deps app
+curl --fail "$APP_URL/health/ready"
+```
+
+Схема БД автоматически назад не откатывается. Rollback приложения допустим только
+при совместимости предыдущего образа с уже применённой схемой; PostgreSQL volume
+и Data Protection keys не удаляются.
+
 ## 4. OAuth2
 
 ### Статус
 
-Не реализован, но разрешён текущим `AGENTS.md` в рамках ДЗ № 6. Разрешён ровно
-один внешний провайдер — Яндекс ID; password login сохраняется.
+Реализован стандартным ASP.NET Core OAuth handler. При отсутствии Client ID или
+Client Secret приложение запускается с password login, а кнопка Яндекс ID скрыта.
+Реальный provider smoke остаётся Pending до регистрации приложения.
 
 ### Планируемый провайдер
 
@@ -119,7 +145,7 @@ request.
 Production-приложение запрашивает только `login:email`: устойчивый `id` входит в
 стандартный ответ, а email нужен для создания локальной Identity-записи.
 
-### Планируемая конфигурация backend
+### Конфигурация backend
 
 ```text
 Authentication__Yandex__ClientId
@@ -129,7 +155,7 @@ Authentication__Yandex__ClientSecret
 Client Secret является серверным секретом. Client ID допустим в конфигурации, но
 для единообразия также поступает в backend через environment configuration.
 
-### Планируемый flow
+### Реализованный flow
 
 1. Клиент выполняет полную навигацию на backend challenge endpoint.
 2. Backend создаёт authentication properties и correlation/state cookie и
@@ -163,9 +189,10 @@ Password login, регистрация и logout остаются доступн
 
 ### Статус
 
-Не реализована.
+Реализована и выключена при отсутствии `YandexMetrika__CounterId`. Тег загружается
+динамически только после `granted`; хранится только строка consent в localStorage.
 
-### Планируемый сервис
+### Сервис
 
 Яндекс Метрика для технических SPA page view и ограниченного набора целей.
 Публичный номер счётчика передаётся в клиентскую конфигурацию, например через
@@ -188,20 +215,17 @@ Password login, регистрация и logout остаются доступн
 - заметки и URL предложений;
 - OAuth query string или exception text.
 
-### Планируемые просмотры и цели
+### Просмотры и цели
 
 | Просмотр/цель | Допустимые параметры |
 | --- | --- |
-| `login_opened` | нет |
 | `login_succeeded` | `method=password|yandex` |
 | `trip_created` | нет |
-| `variant_saved` | `operation=create|update` |
-| `comparison_opened` | нет |
 
 SPA-навигация отправляется методом `hit` только с очищенным путём без query string
-и fragment. Цели отправляются методом `reachGoal`. Список не является
-подтверждением реализации: фактические запросы и появление целей в Яндекс Метрике
-нужно записать после проверки.
+и fragment. Цели отправляются методом `reachGoal`. Unit-тесты подтверждают
+allowlist и очистку URL. Фактические запросы и появление целей в реальном счётчике
+остаются Pending.
 
 ## 6. Health checks и мониторинг
 
@@ -211,7 +235,7 @@ SPA-навигация отправляется методом `hit` тольк�
 - `GET /health/ready` использует EF Core health check для PostgreSQL.
 - Publish workflow уже ожидает `/health/ready` при smoke опубликованного image.
 
-### Планируемый мониторинг
+### Мониторинг
 
 - внешний monitor внутри доступной сети проверяет production URL `/health` на
   `192.168.1.26`;
@@ -220,7 +244,10 @@ SPA-навигация отправляется методом `hit` тольк�
 - период и timeout фиксируются после выбора сервиса;
 - недоступность аналитики не влияет на readiness приложения.
 
-Сервис мониторинга, URL monitor и проверка тестового alert пока не определены.
+В качестве минимального доступного uptime monitor выбран scheduled GitHub Actions
+job на том же защищённом runner, поскольку GitHub-hosted runner не видит LAN.
+Красный workflow run использует штатные GitHub notifications. Ручной запуск с
+`simulate_failure=true` предназначен для тестового alert; результат Pending.
 
 ## 7. Логирование
 
@@ -229,7 +256,7 @@ SPA-навигация отправляется методом `hit` тольк�
 Используется стандартное ASP.NET Core console logging с уровнями `Information` и
 `Warning`. Централизованное хранение не настроено.
 
-### Целевое состояние
+### Реализованное состояние
 
 - однострочный JSON в stdout;
 - timestamp, level, category, event id и trace id;
@@ -238,21 +265,20 @@ SPA-навигация отправляется методом `hit` тольк�
   email и содержимого поездок;
 - retention и просмотр через средства выбранного хостинга либо Docker host.
 
-Промпты для AI-анализа должны работать только с обезличенными фрагментами логов.
+Промпты для AI-анализа работают только с обезличенными фрагментами логов.
+Фактический синтетический пример и ручная проверка: [log_analysis.md](log_analysis.md).
 
 ## 8. Локальная конфигурация
 
-До реализации остаются актуальными команды ДЗ № 5 из README. OAuth и аналитика
-должны быть необязательны для локального запуска: при отсутствии их конфигурации
-приложение сохраняет password login, а аналитика выключена.
+OAuth и аналитика необязательны для локального запуска: при отсутствии их
+конфигурации приложение сохраняет password login, а аналитика выключена.
 
 Реальные Client Secret, password и SSH key нельзя добавлять в `.env.example`,
 `deploy.env.example`, appsettings или документацию.
 
 ## 9. План проверки интеграций
 
-После реализации требуется зафиксировать фактический результат следующих
-проверок:
+Фактический локальный набор проверок:
 
 ```powershell
 dotnet format Together.slnx --verify-no-changes
@@ -273,6 +299,13 @@ dotnet package list --project Together.slnx --include-transitive --vulnerable
 - `/health` и `/health/ready`;
 - тестовый monitoring alert;
 - проверка JSON-логов на отсутствие чувствительных данных.
+
+20 сентября 2026 года выполнены format, locked restore, Release build, оба
+xUnit-проекта, NuGet audit, `/health` и просмотр JSON-лога. Docker CLI отсутствует,
+поэтому Compose/backend smoke и `docker compose config` локально не выполнялись.
+Реальные OAuth, Метрика, production deployment и monitoring alert требуют внешних
+параметров и отмечены Pending. Ссылка на новый GitHub workflow run отсутствует,
+поскольку commit/push не выполнялись.
 
 ## 10. Использование AI
 

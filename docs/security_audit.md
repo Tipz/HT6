@@ -1,7 +1,7 @@
 # Аудит безопасности — домашнее задание № 6
 
-Статус: предварительный статический обзор; полный аудит и исправления ещё не
-выполнены.  
+Статус: локальный аудит и подтверждённые исправления выполнены; внешние GitHub и
+production-проверки отмечены `Pending`.
 Дата обзора: 20 сентября 2026 года.
 
 Этот документ намеренно не объявляет планируемые проверки успешными. Результаты
@@ -10,7 +10,7 @@ dependency audit, CodeQL, динамических тестов и production-п
 
 ## 1. Область аудита
 
-Предварительно изучены:
+Изучены:
 
 - ASP.NET Core Minimal API и Identity configuration;
 - API поездок и проверки владельца;
@@ -22,9 +22,8 @@ dependency audit, CodeQL, динамических тестов и production-п
 - существующие unit, component, API и browser tests;
 - требования `AGENTS.md`, технического задания и ДЗ № 6.
 
-Не выполнялись:
+Остаются внешними и не выполнялись:
 
-- `dotnet package list --vulnerable`;
 - CodeQL/dependency review;
 - DAST или penetration testing;
 - проверка реального production TLS/reverse proxy;
@@ -53,123 +52,124 @@ dependency audit, CodeQL, динамических тестов и production-п
 
 ## 3. Предварительные находки
 
-Severity является предварительной и должна быть подтверждена воспроизведением.
+Findings сопоставлены с кодом; исправления подтверждены указанными тестами либо
+оставлены Pending там, где требуется production-инфраструктура.
 
-### SA-01 — Нет явной antiforgery-защиты изменяющих cookie-запросов
+### SA-01 — Antiforgery для изменяющих cookie-запросов
 
 - **Предварительная severity:** High.
-- **Статус:** Open.
+- **Статус:** Closed.
 - **Компоненты:** `Together.Api/Program.cs`, `Together.Client/Storage/ApiHttp.cs`,
   auth и trips endpoints.
 - **Наблюдение:** приложение использует автоматически отправляемую browser cookie,
   но antiforgery service/token validation не настроены. SameSite=Lax и CORS
   уменьшают поверхность атаки, но не являются полной заменой CSRF-защиты для всех
   same-site/proxy/deployment сценариев.
-- **Рекомендация:** добавить synchronizer token flow, прикладывать token ко всем
-  POST/PUT/PATCH/DELETE и проверять его сервером. OAuth challenge/callback должен
-  продолжать использовать штатный state/correlation механизм.
-- **Проверка исправления:** integration tests с отсутствующим, неверным и валидным
-  token; browser smoke всех изменяющих операций.
+- **Исправление:** API выдаёт synchronizer token; `ApiHttp` прикладывает его ко
+  всем POST/PUT/PATCH/DELETE, middleware валидирует token. OAuth сохраняет штатные
+  state/correlation cookies.
+- **Проверка:** integration tests отклоняют отсутствующий/неверный token и
+  выполняют CRUD с валидным token. Browser smoke Pending без Docker.
 
 ### SA-02 — Слабая политика новых паролей
 
 - **Предварительная severity:** Medium.
-- **Статус:** Open.
+- **Статус:** Closed.
 - **Компонент:** `Together.Api/Program.cs`.
 - **Наблюдение:** минимальная длина равна пяти символам, требования к классам
   символов отключены. Rate limit частично снижает риск, но короткие пароли
   упрощают credential stuffing и offline guessing при компрометации хэшей.
-- **Рекомендация:** увеличить минимальную длину, настроить lockout и обновить
-  подсказку UI. Не инвалидировать существующие password hashes.
+- **Исправление:** минимальная длина новых паролей 12, lockout — пять ошибок на
+  пять минут; UI и тестовые пароли обновлены. Существующие hashes не изменяются.
 - **Проверка исправления:** API tests регистрации с граничными значениями и
   успешный вход ранее созданного пользователя.
 
 ### SA-03 — Известная fallback-строка подключения допустима вне Development
 
 - **Предварительная severity:** High при прямом production-запуске.
-- **Статус:** Open.
+- **Статус:** Closed.
 - **Компонент:** `Together.Api/Program.cs`.
 - **Наблюдение:** при отсутствии `ConnectionStrings:Together` используется строка
   с известным паролем `together_dev` независимо от окружения.
-- **Рекомендация:** разрешать fallback только в Development, а в остальных
-  окружениях завершать запуск с понятной ошибкой без вывода секрета.
+- **Исправление:** fallback разрешён только в Development; другие окружения
+  завершают запуск без вывода строки подключения.
+- **Проверка:** запуск с `ASPNETCORE_ENVIRONMENT=Production` без
+  `ConnectionStrings__Together` завершился ожидаемой конфигурационной ошибкой.
 - **Проверка исправления:** startup test для Production без connection string и
   нормальный запуск с environment secret.
 
 ### SA-04 — Небезопасные значения в deployment env-шаблоне
 
 - **Предварительная severity:** Medium.
-- **Статус:** Open.
+- **Статус:** Closed.
 - **Компонент:** `deploy.env.example`.
 - **Наблюдение:** шаблон содержит `POSTGRES_PASSWORD=together`, bind на
   `0.0.0.0` и `SECURE_COOKIES=false`. Комментарии предупреждают об опасности, но
   копирование шаблона без редактирования создаёт небезопасный стенд.
-- **Рекомендация:** заменить пароль placeholder-значением, вернуть loopback bind и
-  secure cookies как defaults; небезопасные значения приводить только в отдельной
-  локальной инструкции.
+- **Исправление:** обязательные значения оставлены пустыми, bind — `127.0.0.1`,
+  secure cookies — `true`, image требует точный digest.
 - **Проверка исправления:** `docker compose config` с production template и review
   итоговых port/cookie settings.
 
 ### SA-05 — GitHub Actions не закреплены по immutable commit SHA
 
 - **Предварительная severity:** Medium.
-- **Статус:** Open.
+- **Статус:** Closed.
 - **Компоненты:** `.github/workflows/*.yml`.
 - **Наблюдение:** сторонние actions подключаются по изменяемым major tags.
-- **Рекомендация:** после проверки source/release закрепить actions по полному SHA
-  и оставить комментарий с версией. Выдать `packages: write` только publish job.
+- **Исправление:** все сторонние actions закреплены по полным SHA; `packages:
+  write` выдан только publish job.
 - **Проверка исправления:** review workflow permissions и отсутствие `uses:` с
   изменяемым tag для стороннего action.
 
 ### SA-06 — Publish не имеет общего обязательного gate с CI и browser smoke
 
 - **Предварительная severity:** Medium для supply chain/release integrity.
-- **Статус:** Open.
+- **Статус:** Closed locally; workflow run Pending.
 - **Компоненты:** `.github/workflows/*.yml`.
 - **Наблюдение:** три workflow независимо запускаются на push. Publish может
   завершиться, даже если отдельный CI workflow упал. Дополнительно они слушают
   `master`, тогда как рабочая ветка называется `main`.
-- **Рекомендация:** построить один dependency graph jobs либо другой однозначный
-  gate, где publish зависит от quality, tests и smoke.
+- **Исправление:** один workflow связывает quality → build/tests → backend smoke →
+  publish → deploy → production smoke.
 - **Проверка исправления:** намеренно сломанный test исключает publish/deploy.
 
 ### SA-07 — Production proxy/security headers не зафиксированы
 
 - **Предварительная severity:** Medium.
-- **Статус:** Open / зависит от хостинга.
+- **Статус:** Partially closed / production verification Pending.
 - **Компоненты:** API middleware, reverse proxy и deployment documentation.
 - **Наблюдение:** production Compose ожидает внешний HTTPS proxy, но его
   конфигурации в репозитории нет. Не подтверждены forwarded headers, HSTS, CSP и
   другие response headers.
-- **Рекомендация:** определить доверенный proxy, forwarded header policy, HTTPS
-  redirect/HSTS и CSP, совместимую с Blazor и аналитикой. Не доверять forwarded
-  headers от произвольных адресов.
+- **Исправление:** HSTS/security headers/CSP добавлены; forwarded headers включаются
+  только для явно заданных `KnownProxies`. Фактический proxy/TLS ещё не определён.
 - **Проверка исправления:** проверка production response headers, корректного
   external scheme/host и Secure cookie.
 
 ### SA-08 — Глобальный auth rate limit может стать причиной отказа в обслуживании
 
 - **Предварительная severity:** Low/Medium.
-- **Статус:** Needs verification.
+- **Статус:** Closed locally.
 - **Компонент:** `Together.Api/Program.cs`.
 - **Наблюдение:** fixed-window limiter зарегистрирован без видимого partition key;
   лимит может разделяться всеми пользователями экземпляра.
-- **Рекомендация:** подтвердить runtime-поведение и при необходимости применять
-  partitioning по нормализованному client IP с корректной trusted-proxy
-  конфигурацией. Сочетать с Identity lockout.
+- **Исправление:** fixed-window limiter разделён по client IP и сочетается с
+  Identity lockout; forwarded IP принимается только от trusted proxy.
+- **Проверка:** API-тесты подтверждают `429` после исчерпания окна и блокировку
+  password account после пяти неуспешных попыток.
 - **Проверка исправления:** integration/load test независимых клиентов и тест
   возврата `429`.
 
 ### SA-09 — Отсутствует автоматический vulnerability/SAST gate
 
 - **Предварительная severity:** Medium.
-- **Статус:** Open.
+- **Статус:** NuGet gate closed; GitHub SAST Pending.
 - **Компоненты:** GitHub Actions и repository settings.
 - **Наблюдение:** build может обнаружить часть NuGet audit warnings, но отдельного
   отчёта транзитивных уязвимостей, dependency review и CodeQL нет.
-- **Рекомендация:** добавить `dotnet package list --include-transitive
-  --vulnerable`, dependency review и CodeQL; определить порог блокировки и процесс
-  документированного исключения.
+- **Исправление:** NuGet JSON gate падает при наличии vulnerability; dependency
+  review и CodeQL добавлены как availability-dependent jobs.
 - **Проверка исправления:** сохранённый отчёт и тестовый PR с известной запрещённой
   зависимостью в изолированной ветке.
 
@@ -256,14 +256,14 @@ AI-сервисам.
 
 | Проверка | Дата | Результат | Evidence/команда |
 | --- | --- | --- | --- |
-| NuGet direct/transitive audit | Не выполнено | Pending | — |
-| CodeQL | Не выполнено | Pending | — |
-| Dependency review | Не выполнено | Pending | — |
-| OWASP manual review | Предварительно | In progress | Раздел 3 |
-| Antiforgery tests | Не выполнено | Pending | — |
-| OAuth security tests | Не выполнено | Pending | Яндекс ID разрешён текущим scope |
+| NuGet direct/transitive audit | 2026-09-20 | Passed, 0 vulnerable packages | `dotnet package list --project Together.slnx --include-transitive --vulnerable --format json` |
+| CodeQL | Не выполнено | Pending GitHub | Job добавлен, доступность Advanced Security не подтверждена |
+| Dependency review | Не выполнено | Pending GitHub | Job добавлен как availability-dependent |
+| OWASP manual review | 2026-09-20 | Completed locally | Раздел 3, SA-01–SA-09 |
+| Antiforgery tests | 2026-09-20 | Passed | `Together.Api.Tests`, missing/invalid/valid token |
+| OAuth security tests | 2026-09-20 | Passed with fake scheme | success/cancel/repeat/email conflict/open redirect/password login |
 | Production TLS/headers | Не выполнено | Pending | — |
-| Log privacy review | Не выполнено | Pending | — |
+| Log privacy review | 2026-09-20 | Passed on synthetic/local sample | `GET /health?forbidden-marker`: JSON `Together.Request` contained only `/health`; `docs/log_analysis.md`; production logs were not used |
 
 ## 9. Критерии закрытия аудита
 

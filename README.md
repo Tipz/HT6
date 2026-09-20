@@ -1,8 +1,9 @@
 # Вместе в путь
 
-Текущая версия — домашнее задание № 5: Blazor WebAssembly-клиент подключён к
-ASP.NET Core API и PostgreSQL. Реализованы регистрация, cookie-вход, изоляция поездок
-по владельцу, CRUD поездок и вариантов, optimistic concurrency и Docker Compose.
+Текущая версия — домашнее задание № 6. К клиент-серверной реализации добавлены
+единый CI/CD pipeline, antiforgery, OAuth 2.0 через Яндекс ID, opt-in Яндекс
+Метрика, JSON-логи и production monitoring workflow. Регистрация и вход по паролю
+сохранены; платежи не входят в утверждённый объём.
 
 ## **Развёртывание готового образа.** Для запуска на другой инфраструктуре используйте
 [`docker-compose.deploy.yml`](docker-compose.deploy.yml): достаточно Docker Compose и файла
@@ -12,7 +13,7 @@ ASP.NET Core API и PostgreSQL. Реализованы регистрация, c
 Архитектура, API и развёртывание описаны в [backend_documentation.md](backend_documentation.md),
 а требования ДЗ № 5 — в [docs/backend_requirements.md](docs/backend_requirements.md).
 
-## Быстрый запуск ДЗ № 5
+## Быстрый локальный запуск
 
 ```powershell
 Copy-Item .env.example .env
@@ -32,8 +33,8 @@ docker compose up --build
 ghcr.io/tipz/ht5:latest
 ```
 
-`latest` следует за веткой `master`; для воспроизводимого production-деплоя
-используйте release-тег `v*` или неизменяемый тег `sha-*`.
+`latest` следует за веткой `main`. Production workflow разворачивает только
+неизменяемую ссылку `ghcr.io/tipz/ht5@sha256:...`, полученную из publish job.
 
 Адаптивное приложение для сравнения семейных поездок по бюджету, дороге и удобствам для детей.
 Frontend создан в ДЗ № 4 по [исходному ТЗ](docs/technical_specification.md) и расширен backend в ДЗ № 5.
@@ -110,17 +111,48 @@ Remove-Item Env:APP_URL
 те же файлы отчёта.
 
 Результаты и скриншоты: [docs/evidence](docs/evidence/).
-Итог для ДЗ № 5: 32 модульных/компонентных и 4 API-теста прошли; Compose с
+Исторический итог для ДЗ № 5: 32 модульных/компонентных и 4 API-теста прошли; Compose с
 PostgreSQL и отдельный backend smoke-сценарий Chromium проверены на Linux-ВМ.
 Существующий двухбраузерный набор без `--backend-smoke` относится к исторической
 IndexedDB-версии ДЗ № 4 и не является проверкой текущего backend.
 Описание проверок, найденных дефектов и ограничений: [development_report.md](development_report.md).
 
+Локальная проверка ДЗ № 6 от 20 сентября 2026 года: 36/36 unit/component и
+15/15 API tests, Release build без предупреждений, format и NuGet audit прошли.
+Docker CLI на текущей машине отсутствует, поэтому актуальный Compose/Chromium
+smoke, `docker compose config`, production deploy и alert не объявляются
+успешными; они остаются обязательными внешними проверками.
+
 GitHub автоматически выполняет:
 
-- [CI](.github/workflows/ci.yml) — Release-сборку и оба xUnit-проекта;
-- [Backend browser smoke](.github/workflows/browser-tests.yml) — Compose, PostgreSQL и Playwright Chromium;
-- [Publish container image](.github/workflows/publish-container.yml) — публикацию AMD64/ARM64-образа в GHCR.
+- [единый CI, publish и deploy](.github/workflows/ci.yml): locked restore,
+  `dotnet format`, NuGet audit, Release build, оба xUnit-проекта,
+  Compose/Chromium backend smoke, AMD64/ARM64 publish и production deploy;
+- [uptime monitor](.github/workflows/uptime-monitor.yml) — проверку `/health`
+  каждые 15 минут на production self-hosted runner.
+
+Pull request выполняет только проверки. Publish зависит от всех обязательных
+проверок, а deploy выполняется только после push в `main`, в GitHub Environment
+`production`, на runner с labels `self-hosted`, `production`, `together`.
+
+## Яндекс ID и Яндекс Метрика
+
+OAuth включается только при одновременном наличии server-side переменных:
+
+```text
+Authentication__Yandex__ClientId
+Authentication__Yandex__ClientSecret
+```
+
+Стандартный callback handler: `/signin-yandex`. Точный production Redirect URI
+имеет вид `<APP_URL>/signin-yandex`; схема и порт пока не зафиксированы владельцем,
+поэтому приложение у провайдера и реальный OAuth smoke остаются Pending. Запрашивается
+только `login:email`; access token не передаётся клиенту и не сохраняется.
+
+Метрика включается публичным `YandexMetrika__CounterId`. До явного согласия тег
+`mc.yandex.ru` не загружается. Разрешены только очищенные SPA paths и цели
+`login_succeeded` (`method=password|yandex`) и `trip_created`; данные поездок,
+email, query string и fragment не передаются. Согласие можно отозвать.
 
 ## Развёртывание готового образа
 
@@ -130,7 +162,7 @@ GitHub автоматически выполняет:
 ```bash
 cp deploy.env.example .env.deploy
 # PowerShell: Copy-Item deploy.env.example .env.deploy
-# Обязательно замените POSTGRES_PASSWORD и выберите TOGETHER_IMAGE в .env.deploy
+# Обязательно задайте POSTGRES_PASSWORD и точный TOGETHER_IMAGE=@sha256:...
 docker compose --env-file .env.deploy --file docker-compose.deploy.yml up -d
 docker compose --env-file .env.deploy --file docker-compose.deploy.yml ps
 ```
@@ -172,9 +204,15 @@ docker compose --env-file .env.deploy --file docker-compose.deploy.yml down
 
 Workflow публикует:
 
-- `latest` и `master` при push в `master`;
-- `sha-<короткий SHA>` для каждого опубликованного коммита;
+- `latest` и `main` при push в `main`;
+- `sha-<полный SHA>` для каждого опубликованного коммита;
 - `v*` при создании соответствующего Git-тега.
+
+Перед первым production deploy настройте repository variable `APP_URL`,
+Environment variable `DEPLOY_PATH`, runner labels, `.env.deploy` на хосте и доступ
+к GHCR. Rollback выполняется заменой `TOGETHER_IMAGE` на предыдущий digest,
+повтором отдельной миграции только если она совместима, затем `up -d --no-deps app`.
+Volumes PostgreSQL и Data Protection при обновлении не удаляются.
 
 Подробности локального Compose-запуска, миграций и резервного копирования приведены
 в [документации backend](backend_documentation.md).
@@ -195,7 +233,7 @@ Workflow публикует:
 | tests/Together.BrowserTests | Актуальный backend smoke и исторические IndexedDB-сценарии ДЗ № 4 |
 | docker-compose.yml | Локальная сборка и запуск из исходников |
 | docker-compose.deploy.yml | Быстрое развёртывание готовых образов приложения и PostgreSQL |
-| .github/workflows | CI, backend smoke и публикация multi-platform образа |
+| .github/workflows | Связанный CI/publish/deploy и uptime monitoring |
 | docs | Исходное ТЗ, концепции, план и доказательства проверок |
 
 Зависимости закреплены в .csproj и packages.lock.json.
@@ -215,7 +253,10 @@ API проверяет revision и возвращает `409`, если запи
 
 - [Документация backend](backend_documentation.md)
 - [Требования ДЗ № 5](docs/backend_requirements.md)
-- [Материалы сдачи ДЗ № 5](SUBMISSION.md)
+- [Материалы сдачи ДЗ № 6](SUBMISSION.md)
+- [Документация интеграций](docs/integration_documentation.md)
+- [Аудит безопасности](docs/security_audit.md)
+- [AI-анализ синтетического лога](docs/log_analysis.md)
 - [Отчёт о разработке ДЗ № 4](development_report.md)
 - [Адаптированные промпт-шаблоны ДЗ 2](docs/prompt_templates.md)
 - [Правила работы агента](AGENTS.md)

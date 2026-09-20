@@ -1,54 +1,45 @@
-# Материалы домашнего задания № 5
+# Материалы домашнего задания № 6
 
-Проект «Вместе в путь» — клиент-серверное приложение для сравнения вариантов
-семейной поездки. Frontend реализован на Blazor WebAssembly и MudBlazor, backend —
-ASP.NET Core Minimal API, данные — PostgreSQL через EF Core/Npgsql.
+Проект «Вместе в путь» — standalone Blazor WebAssembly, ASP.NET Core Minimal API,
+Identity, EF Core/Npgsql и PostgreSQL. ДЗ № 6 добавляет CI/CD, security hardening,
+Яндекс ID, Яндекс Метрику с согласием, JSON logging и monitoring.
 
 ## Состав сдачи
 
-| Требование | Материал |
+| Требование | Реализация |
 | --- | --- |
-| Код backend и frontend | `src/Together.Api`, `src/Together.Client`, `src/Together.Core`, `src/Together.Contracts` |
-| Миграции БД | `src/Together.Api/Data/Migrations` и `database/migrations.sql` |
-| Docker-конфигурация | Сборка из исходников: `docker-compose.yml`; быстрый запуск образа: `docker-compose.deploy.yml`, `deploy.env.example` |
-| GitHub Actions | `.github/workflows/ci.yml`, `.github/workflows/browser-tests.yml`, `.github/workflows/publish-container.yml` |
-| Готовый контейнер | `ghcr.io/tipz/ht5` для `linux/amd64` и `linux/arm64` |
-| Аутентификация и доступ | ASP.NET Core Identity, HttpOnly cookie, проверка владельца поездки |
-| API и примеры запросов | [backend_documentation.md](backend_documentation.md) |
-| Требования и архитектурное решение | [docs/backend_requirements.md](docs/backend_requirements.md) |
-| README и запуск | [README.md](README.md) |
-| Автоматические тесты | `tests/Together.Api.Tests`, `tests/Together.Tests`, `tests/Together.BrowserTests` |
-| Описание применения AI | [backend_documentation.md](backend_documentation.md#использование-ai) |
+| CI/CD | `.github/workflows/ci.yml`: format/audit → build/tests → backend smoke → publish → deploy → production smoke |
+| Container | `ghcr.io/tipz/ht5`, `linux/amd64` и `linux/arm64`, deployment только по digest |
+| Deployment | `docker-compose.deploy.yml`, отдельный `migrate`, persistent PostgreSQL и Data Protection |
+| OAuth2 | Стандартный ASP.NET Core OAuth handler для Яндекс ID; password login сохранён |
+| Аналитика | Opt-in Яндекс Метрика, очищенные SPA paths, две фиксированные цели |
+| Безопасность | Antiforgery, lockout/rate limit, safe config defaults, CSP/security headers, pinned actions |
+| Monitoring | `/health`, `/health/ready`, Docker healthcheck и scheduled workflow |
+| Логи | Однострочный JSON stdout с timestamp, level, category, event id и trace id |
+| Документация | `docs/integration_documentation.md`, `docs/security_audit.md`, `docs/prompt_templates.md`, `docs/log_analysis.md` |
 
-## Локальный запуск
+## Локально подтверждено 20 сентября 2026 года
 
-```powershell
-Copy-Item .env.example .env
-# Заменить POSTGRES_PASSWORD в .env
-# Для локального HTTP-стенда установить SECURE_COOKIES=false
-docker compose up --build
-```
+- `dotnet format Together.slnx --verify-no-changes --no-restore` — успешно;
+- Release build — успешно без предупреждений;
+- `Together.Tests` — 36/36;
+- `Together.Api.Tests` — 15/15;
+- NuGet direct/transitive vulnerability report — уязвимые пакеты не найдены;
+- `/health` — HTTP 200; JSON stdout содержит `Timestamp`, `LogLevel`,
+  `Category`, `EventId` и scope с `TraceId`;
+- fake OAuth integration tests покрывают успех, отмену, повторный вход,
+  конфликт email, внешний return URL и сохранность password login;
+- тесты аналитики покрывают отсутствие отправок до consent, очищенный URL,
+  allowlist целей/параметров и отзыв согласия.
 
-После применения миграции приложение должно быть доступно по адресу
-`http://localhost:8080`. Для production необходим HTTPS reverse proxy.
+## Pending внешние проверки
 
-## Текущий статус проверок
+- Docker/Compose/Chromium backend smoke: Docker CLI отсутствует на текущей машине;
+- CodeQL, dependency review, publish и workflow run: требуют push в GitHub;
+- production deploy/smoke и uptime alert: требуют настроенный runner и `APP_URL`;
+- реальный Яндекс ID: требуется зарегистрировать Redirect URI после выбора схемы
+  и порта production URL;
+- реальная Яндекс Метрика: требуется номер счётчика и доступ к её отчётам.
 
-- Release-сборка решения: успешно, без предупреждений.
-- Модульные и компонентные тесты: 32/32.
-- API-тесты: 4/4.
-- EF-модель соответствует миграции.
-- Docker Compose 2.39.1 на Linux-ВМ: образы собраны, PostgreSQL прошёл healthcheck,
-  начальная миграция применена, `/health/ready` вернул `Healthy`.
-- HTTP smoke-тест API: регистрация/вход, CRUD поездки и варианта, различение `0` и
-  `null`, `409` для устаревшей revision, `404` для чужой записи и `401` после выхода.
-- Chromium end-to-end: регистрация через UI, серверный пример из трёх вариантов,
-  восстановление после перезагрузки и выход — успешно.
-- GitHub Actions CI и Compose/Chromium smoke — успешно.
-- Публичный GHCR-образ собран для AMD64/ARM64; доступны теги `latest`, `master`,
-  `sha-*` и release-теги `v*`.
-
-Исходники опубликованы в [репозитории GitHub](https://github.com/Tipz/HT5), образ —
-в [GitHub Container Registry](https://github.com/Tipz/HT5/pkgs/container/ht5).
-Вне текущей сдачи остаётся только публичный работающий стенд с HTTPS reverse proxy;
-готовый образ уже можно развернуть на другой инфраструктуре.
+Шаблоны не выдаются за выполненные проверки. Production URL и ссылка на новый
+workflow run будут добавлены после внешней настройки владельцем.
