@@ -8,7 +8,7 @@
 ## Принятые решения
 
 Пользователь выбрал **C# + Blazor WebAssembly + MudBlazor**.
-Используются .NET SDK 10.0.302 и MudBlazor 9.7.0.
+Используются .NET SDK 10.0.303 и MudBlazor 9.7.0.
 
 Основа — [существующее ТЗ](technical_specification.md), обязательные истории US-01–US-10
 и [концепция 3 «План поездки»](ui_concepts/03-analytical.html).

@@ -61,7 +61,7 @@ C# / .NET 10, **Blazor WebAssembly Standalone**, **ASP.NET Core Minimal API**, *
 
 ## Запуск
 
-Нужен .NET SDK **10.0.302** или более новый patch из той же линии (см. global.json).
+Нужен .NET SDK **10.0.303** (см. точную фиксацию версии в global.json).
 Node.js и npm для сборки и запуска не нужны.
 
 Для запуска без Docker сначала подготовьте PostgreSQL и примените миграцию, затем из корня репозитория в двух терминалах:

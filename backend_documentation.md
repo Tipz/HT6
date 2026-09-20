@@ -97,7 +97,7 @@ Content-Type: application/json
 
 ## Локальный запуск
 
-Нужны .NET SDK 10.0.302 и PostgreSQL 17 либо Docker с Compose.
+Нужны .NET SDK 10.0.303 и PostgreSQL 17 либо Docker с Compose.
 
 ```powershell
 Copy-Item .env.example .env

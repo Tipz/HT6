@@ -1,4 +1,4 @@
-FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0.302 AS build
+FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0.303 AS build
 WORKDIR /src
 
 COPY global.json Directory.Build.props Together.slnx ./
@@ -8,14 +8,14 @@ COPY src/Together.Contracts/Together.Contracts.csproj src/Together.Contracts/pac
 COPY src/Together.Client/Together.Client.csproj src/Together.Client/packages.lock.json src/Together.Client/
 COPY src/Together.Api/Together.Api.csproj src/Together.Api/packages.lock.json src/Together.Api/
 RUN dotnet restore src/Together.Api/Together.Api.csproj --locked-mode \
-    && dotnet restore src/Together.Client/Together.Client.csproj --force-evaluate
+    && dotnet restore src/Together.Client/Together.Client.csproj --locked-mode
 
 COPY src src
 RUN dotnet publish src/Together.Client/Together.Client.csproj -c Release --no-restore -o /out/client \
     && dotnet publish src/Together.Api/Together.Api.csproj -c Release --no-restore -o /out/api \
     && cp -R /out/client/wwwroot/. /out/api/wwwroot/
 
-FROM mcr.microsoft.com/dotnet/aspnet:10.0.10 AS final
+FROM mcr.microsoft.com/dotnet/aspnet:10.0.11 AS final
 WORKDIR /app
 COPY --from=build /out/api .
 USER root
