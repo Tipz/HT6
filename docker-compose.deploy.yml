@@ -1,0 +1,63 @@
+name: together
+
+services:
+  database:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-together}
+      POSTGRES_USER: ${POSTGRES_USER:-together}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.deploy}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 5s
+      start_period: 10s
+      retries: 12
+    volumes:
+      - together-postgres:/var/lib/postgresql/data
+    restart: unless-stopped
+    stop_grace_period: 30s
+
+  migrate:
+    image: ${TOGETHER_IMAGE:-ghcr.io/tipz/ht5:latest}
+    pull_policy: always
+    command: ["--migrate"]
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__Together: Host=database;Port=5432;Database=${POSTGRES_DB:-together};Username=${POSTGRES_USER:-together};Password=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.deploy}
+    depends_on:
+      database:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp
+    restart: "no"
+
+  app:
+    image: ${TOGETHER_IMAGE:-ghcr.io/tipz/ht5:latest}
+    pull_policy: always
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__Together: Host=database;Port=5432;Database=${POSTGRES_DB:-together};Username=${POSTGRES_USER:-together};Password=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.deploy}
+      DataProtection__KeysPath: /app/data-protection
+      Authentication__SecureCookies: ${SECURE_COOKIES:-true}
+    ports:
+      - "${APP_BIND_ADDRESS:-127.0.0.1}:${APP_PORT:-8080}:8080"
+    depends_on:
+      database:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    read_only: true
+    tmpfs:
+      - /tmp
+    volumes:
+      - together-data-protection:/app/data-protection
+    restart: unless-stopped
+    stop_grace_period: 30s
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  together-postgres:
+  together-data-protection:

@@ -1,0 +1,18 @@
+<div class="budget-summary">
+    <strong class="price">@Budget.Summary(Expenses)</strong>
+    @if (!Budget.Complete(Expenses)) { <span class="status-warning">Неполный бюджет</span> }
+    @if (NeedsReview) { <span class="status-warning">@Catalog.ReviewNotice</span> }
+</div>
+@if (Details)
+{
+    <div class="units">за всю семью за всю поездку</div>
+    @if (!Budget.Complete(Expenses)) { <p class="missing">Не заполнено: @string.Join(", ", Catalog.ExpenseLabels.Where((_, i) => Expenses[i] is null))</p> }
+    <details><summary>Из чего складывается бюджет</summary>
+        @for (var i = 0; i < 6; i++) { <div class="cost"><span>@Catalog.ExpenseLabels[i]</span><strong>@(Expenses[i] is long amount ? Budget.Money(amount) : "Не указано")</strong></div> }
+    </details>
+}
+@code {
+    [Parameter, EditorRequired] public long?[] Expenses { get; set; } = new long?[6];
+    [Parameter] public bool NeedsReview { get; set; }
+    [Parameter] public bool Details { get; set; }
+}

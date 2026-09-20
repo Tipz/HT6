@@ -1,0 +1,48 @@
+@page "/login"
+@inject AuthClient Auth
+@inject NavigationManager Navigation
+
+<PageTitle>Вход — Вместе в путь</PageTitle>
+<main class="auth-page">
+    <section class="panel auth-card" aria-labelledby="auth-title">
+        <div class="eyebrow">Личная учётная запись</div>
+        <h1 id="auth-title">@(register ? "Регистрация" : "Вход")</h1>
+        <EditForm Model="model" OnValidSubmit="Submit">
+            <DataAnnotationsValidator />
+            <MudTextField @bind-Value="model.Email" Label="Email" InputType="InputType.Email" Required="true" Disabled="busy" />
+            <MudTextField @bind-Value="model.Password" Label="Пароль" InputType="InputType.Password" Required="true" Disabled="busy" HelperText="Не менее 5 символов" />
+            @if (error is not null) { <MudAlert Severity="Severity.Error">@error</MudAlert> }
+            <MudButton ButtonType="ButtonType.Submit" Color="Color.Primary" Variant="MudBlazor.Variant.Filled" Disabled="busy">@(busy ? "Подождите…" : register ? "Создать аккаунт" : "Войти")</MudButton>
+        </EditForm>
+        <MudButton OnClick="Toggle" Variant="MudBlazor.Variant.Text" Disabled="busy">@(register ? "У меня уже есть аккаунт" : "Создать аккаунт")</MudButton>
+    </section>
+</main>
+
+@code {
+    private readonly Credentials model = new();
+    private bool register;
+    private bool busy;
+    private string? error;
+
+    private void Toggle() { register = !register; error = null; }
+
+    private async Task Submit()
+    {
+        busy = true;
+        error = null;
+        try
+        {
+            if (register) await Auth.RegisterAsync(model.Email.Trim(), model.Password);
+            else await Auth.LoginAsync(model.Email.Trim(), model.Password);
+            Navigation.NavigateTo("/");
+        }
+        catch (HttpRequestException ex) { error = ex.Message; }
+        finally { busy = false; }
+    }
+
+    private sealed class Credentials
+    {
+        public string Email { get; set; } = "";
+        public string Password { get; set; } = "";
+    }
+}

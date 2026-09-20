@@ -1,0 +1,110 @@
+name: Publish container image
+
+on:
+  push:
+    branches: [master]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: container-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    name: Build and publish multi-platform image
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Normalize image name
+        id: image
+        shell: bash
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+
+      - name: Generate image metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ steps.image.outputs.name }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.description=Together trip planning application
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=branch
+            type=ref,event=tag
+            type=sha,format=short
+
+      - name: Build and push image
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: mode=min
+          sbom: true
+
+      - name: Smoke test published image with deployment Compose
+        shell: bash
+        env:
+          TOGETHER_IMAGE: ${{ steps.image.outputs.name }}@${{ steps.build.outputs.digest }}
+          POSTGRES_PASSWORD: ci-only-password
+          SECURE_COOKIES: 'false'
+        run: |
+          docker compose --file docker-compose.deploy.yml up --detach
+          for attempt in {1..90}; do
+            if curl --fail --silent --show-error http://127.0.0.1:8080/health/ready > /dev/null; then
+              docker compose --file docker-compose.deploy.yml ps
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose --file docker-compose.deploy.yml ps
+          docker compose --file docker-compose.deploy.yml logs --no-color
+          exit 1
+
+      - name: Add deployment details to summary
+        shell: bash
+        run: |
+          {
+            echo '## Published container image'
+            echo
+            echo '```text'
+            echo '${{ steps.meta.outputs.tags }}'
+            echo '```'
+            echo
+            echo 'Digest: `${{ steps.build.outputs.digest }}`'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Stop deployment smoke stack
+        if: always()
+        env:
+          POSTGRES_PASSWORD: ci-only-password
+        run: docker compose --file docker-compose.deploy.yml down --volumes

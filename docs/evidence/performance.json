@@ -1,0 +1,44 @@
+[
+  {
+    "engine": "chromium",
+    "criterionMs": [
+      37.60000002384186,
+      25.700000047683716,
+      34.80000001192093,
+      32,
+      35.69999998807907
+    ],
+    "columnMs": [
+      21,
+      46.40000003576279,
+      45.80000001192093,
+      22.599999964237213
+    ],
+    "budgetMs": 9.099999964237213,
+    "renderAfterCommitMs": 41.40000003576279,
+    "trips": 10,
+    "variantsPerTrip": 50,
+    "columns": 10
+  },
+  {
+    "engine": "firefox",
+    "criterionMs": [
+      113,
+      74,
+      73,
+      86,
+      80
+    ],
+    "columnMs": [
+      62,
+      97,
+      73,
+      77
+    ],
+    "budgetMs": 27,
+    "renderAfterCommitMs": 130,
+    "trips": 10,
+    "variantsPerTrip": 50,
+    "columns": 10
+  }
+]

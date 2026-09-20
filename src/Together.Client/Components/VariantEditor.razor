@@ -1,0 +1,48 @@
+@inject IJSRuntime Js
+<EditorDialog Title="@(Original is null ? "Добавить вариант" : "Редактировать вариант")" Busy="Busy" OnCancel="Cancel">
+    <form @onsubmit="Submit" @onsubmit:preventDefault @oninput="MarkDirty" @onchange="MarkDirty" novalidate>
+        <fieldset disabled="@Busy" class="form-fields">
+            <p class="note">* Обязательные поля. Неизвестные характеристики и расходы можно оставить пустыми.</p>
+            <h3>Сведения о варианте</h3>
+            <Field Id="name" Label="Название варианта" @bind-Value="draft.Name" Error="@Error("name")" Required />
+            <div class="form-grid"><Field Id="destination" Label="Направление" @bind-Value="draft.Destination" Error="@Error("destination")" Required /><Field Id="accommodation" Label="Жильё" @bind-Value="draft.Accommodation" Error="@Error("accommodation")" Required /></div>
+            <Field Id="url" Label="Ссылка на предложение" @bind-Value="draft.SourceUrl" Error="@Error("url")" />
+            <h3>Дорога и удобства</h3><p class="note">Время в пути — в одну сторону</p>
+            <div class="form-grid"><Field Id="hours" Label="Часы" InputMode="numeric" @bind-Value="draft.Hours" Error="@Error("hours")" /><Field Id="minutes" Label="Минуты" InputMode="numeric" @bind-Value="draft.Minutes" Error="@Error("minutes")" /></div>
+            <Field Id="transfers" Label="Пересадки" InputMode="numeric" @bind-Value="draft.Transfers" Error="@Error("transfers")" />
+            <Field Id="road" Label="Описание дороги" @bind-Value="draft.RoadDescription" Error="@Error("road")" Multiline />
+            <div class="form-grid amenities"><AmenityField Id="kitchen" Label="Кухня" @bind-Value="draft.Kitchen" /><AmenityField Id="crib" Label="Детская кроватка" @bind-Value="draft.Crib" /><AmenityField Id="playground" Label="Детская площадка" @bind-Value="draft.Playground" /></div>
+            <div class="form-grid"><Field Id="distance" Label="Расстояние, м" InputMode="numeric" @bind-Value="draft.DistanceMeters" Error="@Error("distance")" /><Field Id="target" Label="Цель (например, до пляжа)" @bind-Value="draft.DistanceTarget" Error="@Error("target")" /></div>
+            <h3>Расходы</h3><p class="note">₽ за всю семью за всю поездку. Пусто — сумма неизвестна, 0 — расходов нет.</p>
+            <div class="form-grid">@for (var i = 0; i < 6; i++)
+            {
+                var index = i;
+                <Field Id="@($"expense-{i}")" Label="@Catalog.ExpenseLabels[i]" InputMode="decimal" @bind-Value="draft.Expenses[index]" Error="@Error($"expense-{i}")" />
+            }</div>
+            <div class="budget-preview" aria-live="polite"><span>Сумма корректно заполненных статей</span><BudgetView Expenses="draft.ParsedExpenses()" /></div>
+            @if (Original?.NeedsBudgetReview == true) { <label class="check-row"><input type="checkbox" @bind="draft.BudgetReviewed" />Расходы проверены</label> }
+            <Field Id="notes" Label="Заметки" @bind-Value="draft.Notes" Error="@Error("notes")" Multiline />
+        </fieldset>
+        @if (errors.Count > 0) { <p role="alert" class="field-error">Исправьте отмеченные поля</p> }
+        @ErrorContent
+        <div class="form-actions"><MudButton ButtonType="ButtonType.Submit" Variant="MudBlazor.Variant.Filled" Color="Color.Primary" Disabled="Busy">@(Busy ? "Сохраняем…" : "Сохранить")</MudButton><MudButton OnClick="Cancel" Disabled="Busy">Отмена</MudButton></div>
+    </form>
+</EditorDialog>
+@code {
+    [Parameter] public Together.Core.Variant? Original { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public EventCallback<VariantDraft> OnSave { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public RenderFragment? ErrorContent { get; set; }
+    private VariantDraft draft = new();
+    private string initial = "";
+    private Dictionary<string, string> errors = [];
+    private bool focusError;
+    protected override void OnInitialized() { draft = Original is null ? new() : VariantDraft.From(Original); initial = Snapshot(); }
+    private string Snapshot() => System.Text.Json.JsonSerializer.Serialize(draft);
+    private string? Error(string key) => errors.GetValueOrDefault(key);
+    private async Task MarkDirty() => await Js.InvokeVoidAsync("tripUi.setDirty", Snapshot() != initial);
+    private async Task Cancel() { if (!Busy && (Snapshot() == initial || await Js.InvokeAsync<bool>("confirm", "Отбросить несохранённые изменения? Отмена — продолжить редактирование."))) await OnClose.InvokeAsync(); }
+    private async Task Submit() { errors = draft.Validate(); if (errors.Count > 0) { focusError = true; return; } await OnSave.InvokeAsync(draft); }
+    protected override async Task OnAfterRenderAsync(bool firstRender) { if (focusError) { focusError = false; await Js.InvokeVoidAsync("tripUi.focusError"); } }
+}

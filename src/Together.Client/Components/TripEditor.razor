@@ -1,0 +1,48 @@
+@inject IJSRuntime Js
+<EditorDialog Title="@(Original is null ? "Создать поездку" : "Параметры поездки")" Busy="Busy" OnCancel="Cancel">
+    <form @onsubmit="Submit" @onsubmit:preventDefault @oninput="MarkDirty" @onchange="MarkDirty" novalidate>
+        <fieldset disabled="@Busy" class="form-fields">
+            <p class="note">* Обязательные поля. Возраст детей — на момент поездки; 0 означает менее года.</p>
+            <Field Id="name" Label="Название поездки" @bind-Value="draft.Name" Error="@Error("name")" Required />
+            <div class="form-grid">
+                <Field Id="start" Label="Начало поездки" Type="date" @bind-Value="draft.StartDate" Error="@Error("start")" Required />
+                <Field Id="end" Label="Окончание поездки" Type="date" @bind-Value="draft.EndDate" Error="@Error("end")" Required />
+            </div>
+            @if (DateOnly.TryParse(draft.StartDate, out var start) && DateOnly.TryParse(draft.EndDate, out var end) && end > start)
+            { <p class="note">Количество ночей: @(end.DayNumber - start.DayNumber)</p> }
+            <Field Id="adults" Label="Взрослые" InputMode="numeric" @bind-Value="draft.Adults" Error="@Error("adults")" Required />
+            <h3>Дети · @draft.ChildAges.Count</h3>
+            @for (var i = 0; i < draft.ChildAges.Count; i++)
+            {
+                var index = i;
+                <div class="child-row"><Field Id="@($"child-{i}")" Label="@($"Возраст ребёнка {i + 1}")" InputMode="numeric" @bind-Value="draft.ChildAges[index]" Error="@Error($"child-{i}")" Required />
+                <MudButton OnClick="() => RemoveChild(index)" Disabled="@(draft.ChildAges.Count == 1)" aria-label="@($"Убрать ребёнка {i + 1}")">Убрать</MudButton></div>
+            }
+            <MudButton Color="Color.Primary" OnClick="AddChild" Disabled="@(draft.ChildAges.Count >= 10)">Добавить ребёнка</MudButton>
+            @if (Original?.Variants.Count > 0) { <p class="note">Изменение дат или состава семьи пометит расходы всех вариантов для ручной проверки. Введённые суммы сохранятся.</p> }
+        </fieldset>
+        @if (errors.Count > 0) { <p role="alert" class="field-error">Исправьте отмеченные поля</p> }
+        @ErrorContent
+        <div class="form-actions"><MudButton ButtonType="ButtonType.Submit" Variant="MudBlazor.Variant.Filled" Color="Color.Primary" Disabled="Busy">@(Busy ? "Сохраняем…" : "Сохранить")</MudButton><MudButton OnClick="Cancel" Disabled="Busy">Отмена</MudButton></div>
+    </form>
+</EditorDialog>
+@code {
+    [Parameter] public Trip? Original { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public EventCallback<TripDraft> OnSave { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public RenderFragment? ErrorContent { get; set; }
+    private TripDraft draft = new();
+    private string initial = "";
+    private Dictionary<string, string> errors = [];
+    private bool focusError;
+    protected override void OnInitialized() { draft = Original is null ? new() : TripDraft.From(Original); initial = Snapshot(); }
+    private string Snapshot() => System.Text.Json.JsonSerializer.Serialize(draft);
+    private string? Error(string key) => errors.GetValueOrDefault(key);
+    private async Task MarkDirty() => await Js.InvokeVoidAsync("tripUi.setDirty", Snapshot() != initial);
+    private async Task AddChild() { draft.ChildAges.Add(""); await MarkDirty(); }
+    private async Task RemoveChild(int i) { draft.ChildAges.RemoveAt(i); await MarkDirty(); }
+    private async Task Cancel() { if (!Busy && (Snapshot() == initial || await Js.InvokeAsync<bool>("confirm", "Отбросить несохранённые изменения? Отмена — продолжить редактирование."))) await OnClose.InvokeAsync(); }
+    private async Task Submit() { errors = draft.Validate(); if (errors.Count > 0) { focusError = true; return; } await OnSave.InvokeAsync(draft); }
+    protected override async Task OnAfterRenderAsync(bool firstRender) { if (focusError) { focusError = false; await Js.InvokeVoidAsync("tripUi.focusError"); } }
+}

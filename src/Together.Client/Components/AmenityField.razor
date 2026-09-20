@@ -1,0 +1,8 @@
+<div class="field"><label for="@Id">@Label</label><select id="@Id" value="@Value" @onchange="Changed"><option value="unknown">Не указано</option><option value="yes">Есть</option><option value="no">Нет</option></select></div>
+@code {
+    [Parameter] public string Id { get; set; } = "";
+    [Parameter] public string Label { get; set; } = "";
+    [Parameter] public string Value { get; set; } = "unknown";
+    [Parameter] public EventCallback<string> ValueChanged { get; set; }
+    private Task Changed(ChangeEventArgs e) => ValueChanged.InvokeAsync(e.Value?.ToString() ?? "unknown");
+}

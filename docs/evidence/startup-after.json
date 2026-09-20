@@ -1,0 +1,33 @@
+{
+  "baseUrl": "http://localhost:5180",
+  "browser": "151.0.7922.34",
+  "passed": true,
+  "errors": [],
+  "failedRequests": [],
+  "noContentNavigations": [
+    "http://localhost:5180/_framework/blazor-hotreload"
+  ],
+  "modules": [
+    {
+      "url": "http://localhost:5180/_framework/Microsoft.DotNet.HotReload.WebAssembly.Browser.99zm1jdh75.lib.module.js",
+      "status": 200
+    },
+    {
+      "url": "http://localhost:5180/_framework/blazor.webassembly.w3qd1tpl0e.js",
+      "status": 200
+    },
+    {
+      "url": "http://localhost:5180/_framework/dotnet.native.puryxhmhq9.js",
+      "status": 200
+    },
+    {
+      "url": "http://localhost:5180/_framework/dotnet.runtime.web2r9gqbh.js",
+      "status": 200
+    },
+    {
+      "url": "http://localhost:5180/_framework/dotnet.zmxaxug8a5.js",
+      "status": 200
+    }
+  ],
+  "assertionError": null
+}

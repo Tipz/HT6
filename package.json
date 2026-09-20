@@ -1,0 +1,11 @@
+{
+  "name": "together-trip-planner",
+  "private": true,
+  "description": "Учебный frontend на Blazor WebAssembly. Зависимости приложения управляются NuGet в .csproj и packages.lock.json.",
+  "scripts": {
+    "start": "dotnet run --project src/Together.Client",
+    "build": "dotnet build Together.slnx",
+    "test": "dotnet test tests/Together.Tests",
+    "test:browser": "dotnet run --project tests/Together.BrowserTests"
+  }
+}

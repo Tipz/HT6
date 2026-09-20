@@ -1,0 +1,28 @@
+<article class="panel variant-card" aria-label="@Variant.Name">
+    <div class="card-top"><span class="place">@Variant.Destination</span><label class="select-variant"><input type="checkbox" checked="@Selected" disabled="@Busy" @onchange="() => Toggle.InvokeAsync(Variant.Id)" />Сравнить</label></div>
+    <h3>@Variant.Name</h3><p class="accommodation">@Variant.Accommodation</p>
+    <BudgetView Expenses="Variant.Expenses" NeedsReview="Variant.NeedsBudgetReview" Details />
+    <div class="features"><span>Кухня: @Catalog.Amenity(Variant.Kitchen)</span><span>Кроватка: @Catalog.Amenity(Variant.Crib)</span><span>Площадка: @Catalog.Amenity(Variant.Playground)</span></div>
+    <p class="road">@(Variant.TravelMinutes is int m ? $"{m / 60} ч {m % 60} мин" : "Время не указано") в одну сторону · пересадок: @(Variant.Transfers?.ToString() ?? "Не указано")</p>
+    @if (Variant.DistanceMeters is int d) { <p class="note">@d м · @Variant.DistanceTarget</p> }
+    @if (Variant.RoadDescription.Length > 0) { <p class="user-text">@Variant.RoadDescription</p> }
+    @if (Variant.Notes.Length > 0) { <p class="user-text">@Variant.Notes</p> }
+    @if (Variant.SourceUrl.Length > 0) { <a class="action-link" href="@Variant.SourceUrl" target="_blank" rel="noopener noreferrer">Открыть предложение ↗</a> }
+    <div class="card-actions"><MudButton Color="Color.Primary" OnClick="() => Edit.InvokeAsync(Variant.Id)" Disabled="Busy">Редактировать</MudButton><MudButton Color="Color.Error" OnClick="() => Delete.InvokeAsync(Variant.Id)" Disabled="Busy">Удалить</MudButton></div>
+</article>
+@code {
+    [Parameter, EditorRequired] public Together.Core.Variant Variant { get; set; } = new();
+    [Parameter] public bool Selected { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public EventCallback<Guid> Toggle { get; set; }
+    [Parameter] public EventCallback<Guid> Edit { get; set; }
+    [Parameter] public EventCallback<Guid> Delete { get; set; }
+    private Together.Core.Variant? previous;
+    private bool previousSelected, previousBusy, render = true;
+    protected override void OnParametersSet()
+    {
+        render = !ReferenceEquals(previous, Variant) || previousSelected != Selected || previousBusy != Busy;
+        previous = Variant; previousSelected = Selected; previousBusy = Busy;
+    }
+    protected override bool ShouldRender() => render;
+}

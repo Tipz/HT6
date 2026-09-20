@@ -1,0 +1,88 @@
+name: Backend browser smoke
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: browser-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend-browser-smoke:
+    name: Docker Compose and Chromium
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      APP_PORT: 8080
+      POSTGRES_PASSWORD: ci-only-password
+      SECURE_COOKIES: 'false'
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: '**/packages.lock.json'
+
+      - name: Restore dependencies
+        run: dotnet restore Together.slnx
+
+      - name: Build
+        run: dotnet build Together.slnx --configuration Release --no-restore
+
+      - name: Validate ready-image Compose file
+        run: docker compose --file docker-compose.deploy.yml config --quiet
+
+      - name: Install Playwright browsers
+        shell: pwsh
+        run: tests/Together.BrowserTests/bin/Release/net10.0/playwright.ps1 install --with-deps chromium
+
+      - name: Start application stack
+        shell: bash
+        run: |
+          docker compose up --build --detach
+          for attempt in {1..90}; do
+            if curl --fail --silent --show-error http://localhost:8080/health > /dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose ps
+          docker compose logs --no-color
+          exit 1
+
+      - name: Run backend browser smoke test
+        env:
+          APP_URL: http://localhost:8080
+        run: dotnet run --project tests/Together.BrowserTests --configuration Release --no-build -- --backend-smoke
+
+      - name: Collect container logs
+        if: always()
+        shell: bash
+        run: docker compose logs --no-color > "$RUNNER_TEMP/docker-compose.log" 2>&1
+
+      - name: Upload browser evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: browser-evidence
+          path: |
+            docs/evidence
+            ${{ runner.temp }}/docker-compose.log
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Stop application stack
+        if: always()
+        run: docker compose down --volumes

@@ -1,0 +1,51 @@
+<section class="panel comparison" id="comparison" aria-labelledby="comparison-title">
+    <div class="section-head"><div><div class="eyebrow">Рядом — понятнее</div><h2 id="comparison-title">Сравнение вариантов</h2></div><span class="tag">Выбрано: @Trip.SelectedVariantIds.Count</span></div>
+    <fieldset class="filters" disabled="@Busy"><legend>Показывать критерии</legend>
+        @for (var i = 0; i < Catalog.Criteria.Length; i++)
+        {
+            var key = Catalog.Criteria[i];
+            <label><input type="checkbox" checked="@Trip.SelectedCriteria.Contains(key)" @onchange="() => ToggleCriterion.InvokeAsync(key)" />@Catalog.CriterionLabels[i]</label>
+        }
+    </fieldset>
+    @if (Trip.SelectedCriteria.Count == 0) { <p class="empty-inline">Выберите хотя бы один критерий</p> }
+    @if (Selected.Count < 2)
+    {
+        <div class="empty-inline"><p>Выберите минимум два варианта</p><div class="actions"><MudButton Variant="MudBlazor.Variant.Outlined" Color="Color.Primary" OnClick="AddVariant" Disabled="Busy">Добавить вариант</MudButton><a href="#options" class="action-link">Выбрать из карточек ↓</a></div></div>
+    }
+    else if (Trip.SelectedCriteria.Count > 0)
+    {
+        <p class="scroll-hint">↔ Прокручивайте таблицу, чтобы увидеть все варианты</p>
+        <div class="table-wrap" tabindex="0" role="region" aria-label="Сравнение вариантов с прокруткой">
+            <table><thead><tr><th scope="col">Критерий</th>@foreach (var v in Selected) { <th scope="col"><span class="place">@v.Destination</span><br />@v.Name</th> }</tr></thead>
+            <tbody>@for (var i = 0; i < Catalog.Criteria.Length; i++)
+            {
+                var key = Catalog.Criteria[i];
+                if (!Trip.SelectedCriteria.Contains(key)) continue;
+                <tr><th scope="row">@Catalog.CriterionLabels[i]</th>@foreach (var v in Selected)
+                {
+                    <td>@if (key == "budget") { <BudgetView Expenses="v.Expenses" NeedsReview="v.NeedsBudgetReview" /> } else { @Cell(v, key) }</td>
+                }</tr>
+            }</tbody></table>
+        </div>
+    }
+    <p class="note">Бюджет — за всю семью за всю поездку. Время — в одну сторону. «Не указано» означает, что данные ещё нужно уточнить.</p>
+</section>
+@code {
+    [Parameter, EditorRequired] public Trip Trip { get; set; } = new();
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public EventCallback<string> ToggleCriterion { get; set; }
+    [Parameter] public EventCallback AddVariant { get; set; }
+    private List<Together.Core.Variant> Selected { get; set; } = [];
+    protected override void OnParametersSet()
+    {
+        var ids = Trip.SelectedVariantIds.ToHashSet();
+        Selected = Trip.Variants.Where(v => ids.Contains(v.Id)).OrderBy(v => v.CreatedAt).ToList();
+    }
+    private static string Cell(Together.Core.Variant v, string key) => key switch
+    {
+        "travel" => v.TravelMinutes is int m ? $"{m / 60} ч {m % 60} мин" : "Не указано",
+        "transfers" => v.Transfers?.ToString() ?? "Не указано",
+        "kitchen" => Catalog.Amenity(v.Kitchen), "crib" => Catalog.Amenity(v.Crib), "playground" => Catalog.Amenity(v.Playground),
+        "distance" => v.DistanceMeters is int d ? $"{d:N0} м · {v.DistanceTarget}" : "Не указано", _ => ""
+    };
+}

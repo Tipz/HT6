@@ -1,0 +1,7 @@
+{
+  "sdk": "10.0.302",
+  "os": "Windows 10.0.17763 x64",
+  "build": {"command":"dotnet build Together.slnx -c Release --no-restore","errors":0,"warnings":0},
+  "tests": {"command":"dotnet test tests/Together.Tests -c Release --no-build --no-restore","passed":32,"failed":0,"skipped":0},
+  "publish": {"command":"dotnet publish src/Together.Client -c Release --no-restore -o artifacts/publish","exitCode":0,"note":"wasm-tools not installed; additional WebAssembly optimizations skipped"}
+}

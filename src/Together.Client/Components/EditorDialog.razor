@@ -1,0 +1,13 @@
+@inject IJSRuntime Js
+<dialog id="editor" aria-labelledby="editor-title" @oncancel="Cancel" @oncancel:preventDefault>
+    <div class="dialog-heading"><div><div class="eyebrow">Вместе в путь</div><h2 id="editor-title">@Title</h2></div><button type="button" class="icon-button" @onclick="Cancel" disabled="@Busy" aria-label="Закрыть форму">×</button></div>
+    @ChildContent
+</dialog>
+@code {
+    [Parameter] public string Title { get; set; } = "";
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    protected override async Task OnAfterRenderAsync(bool firstRender) { if (firstRender) await Js.InvokeVoidAsync("tripUi.open", "editor"); }
+    private Task Cancel() => Busy ? Task.CompletedTask : OnCancel.InvokeAsync();
+}

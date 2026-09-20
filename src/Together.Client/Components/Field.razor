@@ -1,0 +1,24 @@
+ <div class="field">
+    <label for="@Id">@Label @if (Required) { <span aria-hidden="true">*</span> }</label>
+    @if (Multiline)
+    {
+        <textarea id="@Id" value="@Value" @oninput="Changed" aria-invalid="@(Error is null ? "false" : "true")" aria-describedby="@(Error is null ? null : Id + "-error")" rows="3"></textarea>
+    }
+    else
+    {
+        <input id="@Id" type="@Type" value="@Value" @oninput="Changed" inputmode="@InputMode" aria-required="@Required.ToString().ToLowerInvariant()" aria-invalid="@(Error is null ? "false" : "true")" aria-describedby="@(Error is null ? null : Id + "-error")" />
+    }
+    @if (Error is not null) { <span id="@(Id + "-error")" class="field-error">@Error</span> }
+</div>
+@code {
+    [Parameter, EditorRequired] public string Id { get; set; } = "";
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public EventCallback<string> ValueChanged { get; set; }
+    [Parameter] public string Type { get; set; } = "text";
+    [Parameter] public string? InputMode { get; set; }
+    [Parameter] public bool Required { get; set; }
+    [Parameter] public bool Multiline { get; set; }
+    [Parameter] public string? Error { get; set; }
+    private Task Changed(ChangeEventArgs e) => ValueChanged.InvokeAsync(e.Value?.ToString() ?? "");
+}
