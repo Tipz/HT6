@@ -61,6 +61,9 @@ public sealed class AnalyticsTests : BunitContext
     [Theory]
     [InlineData("https://app.example.test/path?email=x#token", "/path")]
     [InlineData("/local?query=1#fragment", "/local")]
+    [InlineData("local?query=1", "/local")]
+    [InlineData("?query=1#fragment", "/")]
+    [InlineData("/#fragment", "/")]
     public void SanitizePath_RemovesQueryAndFragment(string input, string expected) =>
         Assert.Equal(expected, AnalyticsClient.SanitizePath(input));
 

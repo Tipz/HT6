@@ -88,9 +88,13 @@ public sealed class AnalyticsClient(IJSRuntime js, AuthClient auth, NavigationMa
 
     public static string SanitizePath(string uri)
     {
-        if (Uri.TryCreate(uri, UriKind.Absolute, out var absolute))
+        if (Uri.TryCreate(uri, UriKind.Absolute, out var absolute)
+            && (absolute.Scheme == Uri.UriSchemeHttp || absolute.Scheme == Uri.UriSchemeHttps))
             return string.IsNullOrEmpty(absolute.AbsolutePath) ? "/" : absolute.AbsolutePath;
+
         var clean = uri.Split('?', '#')[0];
+        if (string.IsNullOrEmpty(clean))
+            return "/";
         return clean.StartsWith('/') ? clean : $"/{clean}";
     }
 
