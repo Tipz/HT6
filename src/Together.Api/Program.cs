@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using Together.Api.Authentication;
 using Together.Api.Data;
 using Together.Api.Endpoints;
+using Together.Api.Security;
 using Together.Contracts;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -103,6 +104,16 @@ foreach (var value in builder.Configuration.GetSection("ForwardedHeaders:KnownPr
         forwardedOptions.KnownProxies.Add(address);
 
 var app = builder.Build();
+var indexFile = app.Environment.WebRootFileProvider.GetFileInfo("index.html");
+string? indexHtml = null;
+if (indexFile.Exists)
+{
+    using var reader = new StreamReader(indexFile.CreateReadStream());
+    indexHtml = reader.ReadToEnd();
+}
+var contentSecurityPolicy = ContentSecurityPolicyFactory.Create(
+    long.TryParse(app.Configuration["YandexMetrika:CounterId"], out _),
+    indexHtml);
 
 if (forwardedOptions.KnownProxies.Count > 0)
     app.UseForwardedHeaders(forwardedOptions);
@@ -131,10 +142,7 @@ app.Use(async (context, next) =>
         context.Response.Headers.XContentTypeOptions = "nosniff";
         context.Response.Headers["Referrer-Policy"] = "no-referrer";
         context.Response.Headers.Append("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
-        var analyticsEnabled = long.TryParse(app.Configuration["YandexMetrika:CounterId"], out _);
-        context.Response.Headers.ContentSecurityPolicy = analyticsEnabled
-            ? "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://mc.yandex.ru; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://mc.yandex.ru; connect-src 'self' https://mc.yandex.ru; font-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
-            : "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'";
+        context.Response.Headers.ContentSecurityPolicy = contentSecurityPolicy;
         return Task.CompletedTask;
     });
     await next();

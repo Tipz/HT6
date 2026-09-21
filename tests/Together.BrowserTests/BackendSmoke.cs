@@ -108,8 +108,11 @@ public static class BackendSmoke
                 Path = Path.Combine(evidence, "backend-chromium-failure.png"),
                 FullPage = true
             });
-            await WriteResult(evidence, browser.Version, false, ex.Message);
-            Console.WriteLine($"FAIL backend-smoke: {ex.Message}");
+            var diagnostics = errors.Count == 0
+                ? ex.Message
+                : $"{ex.Message}{Environment.NewLine}Browser errors:{Environment.NewLine}{string.Join(Environment.NewLine, errors)}";
+            await WriteResult(evidence, browser.Version, false, diagnostics);
+            Console.WriteLine($"FAIL backend-smoke: {diagnostics}");
             return 1;
         }
     }
