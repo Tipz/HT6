@@ -6,6 +6,21 @@ namespace Together.Api.Tests;
 public sealed class SecurityControlsTests
 {
     [Fact]
+    public async Task Registration_AcceptsFiveDigitPassword()
+    {
+        using var factory = new TogetherApiFactory();
+        using var client = factory.CreateClient();
+        using var register = await TripsApiTests.SendWithAntiforgery(
+            client, HttpMethod.Post, $"{ApiRoutes.Auth}/register", new
+            {
+                email = $"short-password-{Guid.NewGuid():N}@example.test",
+                password = "12345"
+            });
+
+        Assert.Equal(HttpStatusCode.OK, register.StatusCode);
+    }
+
+    [Fact]
     public async Task PasswordLogin_LocksAccountAfterFiveFailures()
     {
         using var factory = new TogetherApiFactory();
