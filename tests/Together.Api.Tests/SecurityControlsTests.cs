@@ -21,6 +21,21 @@ public sealed class SecurityControlsTests
     }
 
     [Fact]
+    public async Task Registration_RejectsPasswordShorterThanFiveCharacters()
+    {
+        using var factory = new TogetherApiFactory();
+        using var client = factory.CreateClient();
+        using var register = await TripsApiTests.SendWithAntiforgery(
+            client, HttpMethod.Post, $"{ApiRoutes.Auth}/register", new
+            {
+                email = $"too-short-password-{Guid.NewGuid():N}@example.test",
+                password = "1234"
+            });
+
+        Assert.Equal(HttpStatusCode.BadRequest, register.StatusCode);
+    }
+
+    [Fact]
     public async Task PasswordLogin_LocksAccountAfterFiveFailures()
     {
         using var factory = new TogetherApiFactory();
