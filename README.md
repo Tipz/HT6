@@ -241,9 +241,11 @@ Compose:
 - сохраняет PostgreSQL и Data Protection keys в отдельных volumes;
 - запускает приложение от пользователя `app` с read-only root filesystem.
 
-По умолчанию приложение публикуется только на `127.0.0.1:8080`, что рассчитано
-на reverse proxy на том же хосте. В production используйте HTTPS и
-`SECURE_COOKIES=true`. Для reverse proxy при необходимости задайте точный
+Сам Compose по умолчанию использует `127.0.0.1:8080`, но текущий
+`deploy.env.example` задаёт `APP_BIND_ADDRESS=0.0.0.0` для доступа из локальной
+сети. В этом режиме ограничьте порт firewall доверенной LAN. Если reverse proxy
+работает на том же хосте, безопаснее установить `APP_BIND_ADDRESS=127.0.0.1`.
+В production используйте HTTPS и `SECURE_COOKIES=true`; задайте точный
 `TRUSTED_PROXY_IP` и включите `USE_HTTPS_REDIRECTION` только после корректной
 передачи `X-Forwarded-Proto`.
 

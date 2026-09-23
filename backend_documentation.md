@@ -51,8 +51,15 @@ Identity и они не попадают в логи.
 
 Каждый запрос поездки фильтруется одновременно по `id` и `OwnerId`. Для чужого id
 возвращается `404`, чтобы не раскрывать существование записи. Прикладных ролей нет.
-Изменяющие запросы с cookie защищены SameSite и CORS: сторонний origin не получает
-credentialed-доступ. Секреты передаются через переменные окружения.
+Изменяющие `/api`-запросы с cookie защищены synchronizer antiforgery token;
+SameSite и CORS дополнительно ограничивают cross-origin доступ. Секреты передаются
+через переменные окружения.
+
+Дополнительный вход через Яндекс ID использует backend Authorization Code Flow с
+PKCE. Он включается только при наличии `Authentication__Yandex__ClientId` и
+`Authentication__Yandex__ClientSecret`; иначе password login продолжает работать,
+а кнопка провайдера скрывается. Callback — `<APP_URL>/signin-yandex`. Запрашивается
+только `login:email`, provider token не передаётся в Blazor и не сохраняется.
 
 ## API
 
@@ -62,6 +69,10 @@ credentialed-доступ. Секреты передаются через пер
 | POST | `/api/auth/login?useCookies=true` | Вход и cookie |
 | POST | `/api/auth/logout` | Выход |
 | GET | `/api/auth/me` | Текущий пользователь |
+| GET | `/api/auth/yandex` | Начало входа через Яндекс ID |
+| GET | `/api/auth/yandex/callback` | Завершение внешнего входа |
+| GET | `/api/auth/antiforgery` | Получение request token |
+| GET | `/api/settings` | Публичные флаги OAuth и номер счётчика |
 | GET | `/api/trips` | Все поездки пользователя |
 | GET | `/api/trips/{id}` | Одна поездка с вариантами |
 | POST | `/api/trips` | Создание поездки |
@@ -113,14 +124,14 @@ Compose сначала ждёт PostgreSQL, запускает одноразо�
 
 ## Готовый образ и перенос на другую инфраструктуру
 
-Workflow `.github/workflows/publish-container.yml` публикует публичный OCI-образ:
+Единый workflow `.github/workflows/ci.yml` публикует OCI-образ:
 
 ```text
 ghcr.io/tipz/ht6
 ```
 
-Manifest содержит `linux/amd64` и `linux/arm64`. Push в `master` обновляет теги
-`latest`, `master` и `sha-<короткий SHA>`; Git-тег `v*` создаёт одноимённый тег
+Manifest содержит `linux/amd64` и `linux/arm64`. Push в `main` обновляет теги
+`latest`, `main` и `sha-<полный SHA>`; Git-тег `v*` создаёт одноимённый тег
 образа. `latest` изменяемый, поэтому production-развёртывание следует закреплять
 за release- или SHA-тегом.
 
@@ -150,11 +161,18 @@ cp deploy.env.example .env.deploy
 docker compose --env-file .env.deploy --file docker-compose.deploy.yml up -d
 ```
 
+Учебный production-стенд работает на `192.168.1.26` за существующими Traefik и
+локальным центром сертификации. Публичного IP у стенда нет. Deployment выполняется
+оператором вручную; подготовленный job для self-hosted GitHub runner отключён в
+текущем универсальном workflow из-за зависимости от локального пути, runner
+labels, приватной сети и PKI.
+
 `docker-compose.deploy.yml` использует официальный `postgres:17-alpine`, не
 публикует порт БД, применяет EF-миграции отдельным контейнером и хранит PostgreSQL
-и Data Protection в именованных volumes. Приложение по умолчанию привязано к
-`127.0.0.1:${APP_PORT:-8080}`; внешний доступ должен предоставлять reverse proxy.
-Для прямой публикации порта требуется осознанно задать `APP_BIND_ADDRESS=0.0.0.0`.
+и Data Protection в именованных volumes. Compose default привязан к
+`127.0.0.1:${APP_PORT:-8080}`, но текущий `deploy.env.example` устанавливает
+`APP_BIND_ADDRESS=0.0.0.0` для доступа из LAN. Этот режим требует ограничения
+порта firewall. При reverse proxy на том же хосте используйте `127.0.0.1`.
 
 При обновлении измените `TOGETHER_IMAGE` в `.env.deploy` на новый release- или
 SHA-тег и повторите `up -d`. Обычный `docker compose ... down` сохраняет volumes;
@@ -190,7 +208,7 @@ docker compose exec -T database pg_dump -U together -d together -Fc > together.b
 
 ## Проверки
 
-На 17 сентября 2026 года выполнены:
+Историческая локальная проверка ДЗ № 5 от 17 сентября 2026 года:
 
 ```text
 dotnet build Together.slnx -c Release              — успешно, 0 ошибок, 0 предупреждений
@@ -205,26 +223,30 @@ GitHub Actions Backend browser smoke               — Compose + PostgreSQL + Ch
 GitHub Actions Publish container image             — GHCR, AMD64/ARM64, успешно
 ```
 
-На стенде подтверждены регистрация и cookie-вход, создание и чтение поездки,
+На стенде ДЗ № 5 были подтверждены регистрация и cookie-вход, создание и чтение поездки,
 создание варианта с расходами `0` и `null`, конфликт revision, изоляция владельцев,
-выход и сохранение данных после перезагрузки страницы. HTTPS reverse proxy и
-публичный production-домен в рамках локальной проверки не разворачивались.
+выход и сохранение данных после перезагрузки страницы.
+
+Для ДЗ № 6 локально прошли 36 Core/UI- и 15 API-тестов. На текущем коммите
+[GitHub Actions run](https://github.com/Tipz/HT6/actions/runs/35828731866)
+успешно выполнил format/NuGet audit, Release build, оба xUnit-проекта, CodeQL,
+Compose/PostgreSQL/Chromium smoke, AMD64/ARM64 publish и smoke опубликованного
+digest. Владелец подтвердил HTTPS, Яндекс ID и Метрику на локальном стенде за
+существующим Traefik и локальной PKI.
 
 ## Автоматизация GitHub
 
-Все workflow поддерживают ручной запуск (`workflow_dispatch`):
+Актуальный workflow поддерживает ручной запуск (`workflow_dispatch`):
 
 | Workflow | Автоматический запуск | Результат |
 | --- | --- | --- |
-| `.github/workflows/ci.yml` | push и pull request в `master` | Restore, Release-сборка, xUnit/bUnit и API-тесты, TRX artifact |
-| `.github/workflows/browser-tests.yml` | push и pull request в `master` | Compose-стенд, миграция, PostgreSQL, Chromium backend smoke, evidence и логи |
-| `.github/workflows/publish-container.yml` | push в `master` и теги `v*` | Multi-platform image, OCI metadata, provenance, SBOM, Buildx cache и запуск опубликованного digest через deployment Compose |
+| `.github/workflows/ci.yml` | push и pull request в `main`, теги `v*` | Format/audit, Release build, xUnit, CodeQL, Compose/Chromium smoke, multi-platform publish и smoke опубликованного digest |
 
 Публикация использует автоматически выдаваемый `GITHUB_TOKEN` только с правами
 `contents: read` и `packages: write`; персональный токен в репозитории не нужен.
-Backend workflow выполняет `docker compose config --quiet` для
+Backend smoke job выполняет `docker compose config --quiet` для
 `docker-compose.deploy.yml` на каждом push и pull request. После публикации образа
-publish workflow дополнительно запускает этот Compose с точным digest, применяет
+publish job дополнительно запускает этот Compose с точным digest, применяет
 миграцию и ждёт успешный `/health/ready`.
 
 ## Использование AI

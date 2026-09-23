@@ -1,521 +1,161 @@
-# План реализации домашнего задания № 6
+# Реализация домашнего задания № 6
 
-Статус: реализован локально; внешняя настройка и production-проверки Pending.
-Дата анализа: 20 сентября 2026 года.
+Документ фиксирует принятые решения и итоговую последовательность реализации.
+Актуализация: 23 сентября 2026 года.
 
-Документ сохраняет исходный план и дополнен фактическим статусом. Подтверждённые
-результаты записаны в `integration_documentation.md`, `security_audit.md`, README
-и `SUBMISSION.md`; внешние проверки не выдаются за выполненные.
+## 1. Исходная архитектура
 
-## 1. Текущее состояние
+До ДЗ № 6 проект уже включал:
 
-### Архитектура
+- `Together.Core` с моделью, вычислениями и валидацией;
+- `Together.Contracts` с DTO и маршрутами API;
+- standalone `Together.Client` на Blazor WebAssembly и MudBlazor;
+- `Together.Api` на ASP.NET Core Minimal API, Identity и EF Core/Npgsql;
+- PostgreSQL, миграции и серверное владение данными;
+- Dockerfile и Compose с отдельным migration job;
+- модульные, компонентные, API и браузерные тесты.
 
-- `Together.Core` содержит предметную модель, расчёты и валидацию.
-- `Together.Contracts` содержит DTO и маршруты API.
-- `Together.Client` — standalone Blazor WebAssembly с MudBlazor, API-клиентами и
-  добровольным импортом старых данных IndexedDB.
-- `Together.Api` — ASP.NET Core Minimal API, ASP.NET Core Identity, EF
-  Core/Npgsql и PostgreSQL.
-- Production-сборка клиента размещается в `wwwroot` API. Основной сценарий
-  использует один origin и HttpOnly authentication cookie.
-- Стандартная схема Identity уже содержит `AspNetUserLogins`, поэтому для одного
-  внешнего OAuth-провайдера отдельная модель пользователя не требуется.
+В production опубликованный клиент раздаётся API с того же origin. IndexedDB
+используется только для добровольного импорта данных старой версии.
 
-### CI/CD и эксплуатация
+## 2. Решения ДЗ № 6
 
-В `.github/workflows` уже находятся:
+### CI и supply chain
 
-- `ci.yml`: restore, Release-сборка и два xUnit-проекта;
-- `browser-tests.yml`: Compose, PostgreSQL, миграция и Chromium backend smoke;
-- `publish-container.yml`: multi-platform образ, GHCR, SBOM и smoke
-  опубликованного digest.
-
-Проект уже имеет multi-stage `Dockerfile`, `docker-compose.deploy.yml`, отдельный
-одноразовый сервис `migrate`, непривилегированного пользователя контейнера,
-read-only filesystem и постоянные volumes для PostgreSQL и Data Protection.
-
-API предоставляет:
-
-- `/health` для проверки процесса;
-- `/health/ready` для проверки процесса и PostgreSQL.
-
-### Тесты
-
-- `Together.Tests`: предметная логика, валидация и bUnit-компоненты.
-- `Together.Api.Tests`: аутентификация, CRUD, владение, concurrency, validation и
-  базовый health check.
-- `Together.BrowserTests`: Chromium backend smoke с регистрацией, сохранением,
-  перезагрузкой и выходом.
-
-### Что можно переиспользовать
-
-- существующие Identity cookie и таблицы Identity;
-- `AuthClient`, `ApiHttp` и экран `Login.razor`;
-- паттерн Minimal API endpoints из `TripsEndpoints`;
-- существующие Dockerfile, deployment Compose и migration job;
-- GHCR Buildx-публикацию и backend smoke;
-- health endpoints;
-- `docs/prompt_templates.md` и `development_report.md` для документирования
-  использования AI.
-
-### Чего не хватает
-
-- автоматического деплоя на работающий стенд;
-- проверки форматирования и отдельного vulnerability gate;
-- SAST/dependency review;
-- OAuth2-входа и аналитики;
-- consent-механизма для аналитики;
-- JSON-логов, внешнего uptime monitoring и alerts;
-- завершённых документов `integration_documentation.md` и
-  `security_audit.md`.
-
-## 2. Что требуется изменить
-
-1. Реализовать разрешённый текущим scope OAuth 2.0 через Яндекс ID.
-2. Исправить триггеры GitHub Actions и выстроить единый порядок quality → test →
-   smoke → publish → deploy.
-3. Добавить format, NuGet vulnerability audit и SAST.
-4. Исправить подтверждённые проблемы безопасности, включая CSRF-защиту
-   изменяющих cookie-authenticated запросов.
-5. Добавить Яндекс ID как дополнительный вход без удаления password login.
-6. Добавить Яндекс Метрику только после согласия и без данных поездок или
-   пользователя.
-7. Перевести backend-логи в JSON и подключить мониторинг существующих health
-   endpoints.
-8. Развернуть прошедший проверки immutable image через существующий Compose.
-9. Выполнить итоговые тесты и актуализировать документацию.
-
-Модель поездок, бизнес-правила `Together.Core`, CRUD и основная схема данных
-остаются без изменений.
-
-## 3. Противоречия и вопросы
-
-### OAuth и утверждённый scope
-
-Противоречие устранено: действующий `AGENTS.md` разрешает в рамках ДЗ № 6 ровно
-один внешний вход — OAuth 2.0 через Яндекс ID. Он добавляется без ролей и без
-удаления существующих регистрации и password flow. Другие OAuth-провайдеры не
-входят в scope.
-
-### Несовпадение ветки
-
-Рабочая ветка репозитория называется `main`, а существующие workflow слушают
-только `master`. Автоматические push/PR-запуски необходимо перевести на `main`.
-
-### Deployment target
-
-Production target — локальная машина `192.168.1.26` с Docker Compose. Поскольку
-это приватный LAN-адрес, deployment job запускается защищённым self-hosted GitHub
-Actions runner на этой машине; GitHub-hosted runner используется только для
-проверок и публикации образа. Внешнее доменное имя не требуется. Схему и порт
-production URL, а также TLS/reverse proxy необходимо зафиксировать до регистрации
-Redirect URI в Яндекс OAuth; схема, host, port и path Redirect URI должны
-соответствовать настройкам приложения у провайдера.
-
-### Имя образа
-
-Каноническое имя зафиксировано: `ghcr.io/tipz/ht6`. Publish и deploy workflow не
-должны вычислять другое имя из `GITHUB_REPOSITORY`.
-
-### Конфиденциальность аналитики
-
-В аналитику нельзя отправлять названия и параметры поездок, направления, бюджеты,
-возраст детей, заметки, URL предложений, email и стабильный идентификатор
-пользователя. OAuth query string также должен исключаться из page view.
-
-### Платежи
-
-Платежи опциональны в ДЗ № 6 и исключены текущим ТЗ. В эту реализацию они не
-входят. Две интеграции в утверждённом scope — Яндекс ID OAuth и аналитика.
-
-## 4. Предлагаемая архитектура
-
-### CI/CD
-
-Существующие workflow следует консолидировать или связать так, чтобы результат
-имел один обязательный порядок:
+Три прежних workflow объединены в один dependency graph:
 
 ```text
-format и security gates
-          ↓
-Release build и xUnit
-          ↓
-Compose и backend smoke
-          ↓
-build/push immutable image
-          ↓
-production deploy
-          ↓
-post-deploy smoke
+format/NuGet audit
+  → Release build и xUnit
+  → CodeQL
+  → Docker Compose/PostgreSQL/Chromium smoke
+  → AMD64/ARM64 publish
+  → smoke опубликованного digest
 ```
 
-Для pull request выполняются только проверки. Для push в `main` после успешных
-проверок публикуется и разворачивается образ. Production job использует GitHub
-Environment; deployment secrets недоступны остальным jobs.
+Actions закреплены полными commit SHA. Publish job получает только
+`contents: read` и `packages: write`. Образ публикуется в
+`ghcr.io/tipz/ht6` с OCI metadata, provenance и SBOM.
 
-### OAuth2
+### Deployment
 
-- В `Together.Api` регистрируется OAuth 2.0 handler для Яндекс ID с authorization,
-  token и user-information endpoints Яндекса.
-- Client ID и Client Secret поступают только через серверную конфигурацию.
-- Challenge/callback размещаются в отдельном Minimal API endpoint-модуле.
-- Callback использует существующие `ApplicationUser`, `UserManager` и
-  `SignInManager`.
-- Запрашивается только право `login:email`, необходимое для создания локальной
-  учётной записи; устойчивый `id` входит в стандартный ответ API Яндекс ID.
-- Устойчивый provider key берётся из идентификатора Яндекс ID, а не из email.
-- Redirect разрешается только на локальный путь.
-- Автоматическое связывание существующего password-аккаунта лишь по совпадению
-  email запрещено без дополнительного подтверждения.
-- Текущие регистрация, password login, logout и `/api/auth/me` сохраняются.
+Учебный production-стенд находится на `192.168.1.26` в приватной сети.
+Существующие Traefik и локальный центр сертификации обеспечивают HTTPS.
 
-### CSRF и защита API
+Автоматический deploy через защищённый self-hosted runner был подготовлен, но
+отключён в универсальном workflow, поскольку зависел от локального пути, runner
+labels, приватной сети, Traefik и PKI. Текущий deployment выполняется оператором
+через `docker-compose.deploy.yml` по immutable image digest.
 
-- API выдаёт antiforgery token клиенту.
-- `ApiHttp` прикладывает token ко всем POST/PUT/PATCH/DELETE.
-- Token обновляется после смены состояния входа.
-- OAuth использует штатные `state` и correlation cookie провайдера.
-- Production запускается только с явно заданной строкой подключения.
-- Forwarded headers, HTTPS и security headers настраиваются с учётом reverse
-  proxy и Blazor WebAssembly.
+Миграции выполняются отдельным одноразовым контейнером. PostgreSQL и Data
+Protection keys сохраняются в volumes. Приложение работает от пользователя
+`app` с read-only root filesystem.
+
+### OAuth 2.0
+
+Выбран единственный разрешённый provider — Яндекс ID. Password login сохранён.
+Используется backend Authorization Code Flow с PKCE и стандартными
+state/correlation cookies.
+
+Запрашивается только `login:email`. Provider token не передаётся в Blazor и не
+сохраняется. Совпадение email не связывает аккаунты автоматически. Redirect URI:
+`<APP_URL>/signin-yandex`.
 
 ### Аналитика
 
-В `Together.Client` добавляется один `AnalyticsClient` и небольшой JS-модуль.
-Тег Яндекс Метрики не загружается до согласия. Публичный номер счётчика не
-считается секретом, но аналитика полностью выключается при его отсутствии.
-Вебвизор, карты, e-commerce и передача пользовательских/session parameters не
-включаются.
+Выбрана Яндекс Метрика. Тег загружается только после согласия пользователя.
+Разрешены очищенные SPA paths и две цели:
 
-Разрешены только фиксированные технические события, например
-`login_succeeded`, `trip_created`, `variant_saved`, `comparison_opened`. Значения
-из моделей поездки в параметры событий не передаются.
+- `login_succeeded` с `method=password|yandex`;
+- `trip_created` без пользовательских параметров.
 
-### Логи и мониторинг
+Поездки, бюджеты, возраст детей, заметки, email, user id, query string и fragment
+в аналитику не передаются.
 
-- Используется встроенный `AddJsonConsole`, без новой logging-платформы в коде.
-- Логи содержат уровень, event id, timestamp, trace id и технический результат.
-- Request body, cookie, OAuth tokens, email и данные поездок не логируются.
-- `/health` используется внешним uptime monitor.
-- `/health/ready` используется deployment smoke и диагностикой БД.
-- Недоступность Яндекс Метрики не делает приложение `Unhealthy`.
+### Безопасность
 
-## 5. План реализации
+Добавлены:
 
-### Этап 1 — Зафиксировать OAuth и production-конфигурацию
+- synchronizer antiforgery token для изменяющих API-запросов;
+- CSP, HSTS, Referrer-Policy, Permissions-Policy и `nosniff`;
+- auth rate limit по client IP и Identity lockout;
+- безопасный local-only `returnUrl`;
+- production fail-fast при отсутствии строки подключения;
+- закрепление GitHub Actions по SHA;
+- NuGet vulnerability gate и CodeQL;
+- non-root container и read-only root filesystem.
 
-**Цель**
+Полный реестр находится в [security_audit.md](security_audit.md).
 
-Устранить противоречия до изменения прикладного кода.
+### Monitoring и logging
 
-**Изменения**
+`/health` проверяет процесс, `/health/ready` — процесс и PostgreSQL. Dockerfile и
+Compose используют container healthcheck. Локальный стенд дополнительно
+контролируется существующей инфраструктурой Docker/Traefik.
 
-`AGENTS.md`, `docs/technical_specification.md`,
-`docs/backend_requirements.md`, `integration_documentation.md`, а также внешние
-настройки Яндекс OAuth, Яндекс Метрики, локального Docker-host и GitHub
-Environment.
+Логи выводятся однострочным JSON в stdout и содержат UTC timestamp, level,
+category, Event ID и TraceId/SpanId. Docker ограничивает размер файлов.
+Production logs и пользовательские данные не передаются AI.
 
-**Реализация**
+## 3. Выполненные этапы
 
-- Использовать разрешённый Яндекс ID как единственный OAuth-провайдер.
-- Зафиксировать `main`, Docker-host `192.168.1.26` и образ
-  `ghcr.io/tipz/ht6`.
-- Установить на production-host защищённый self-hosted runner с Docker Compose;
-  не использовать его для workflow из pull request.
-- Зафиксировать схему/порт production URL, зарегистрировать точный Redirect URI в
-  отдельном production-приложении Яндекс OAuth и определить consent-политику.
-- Создать environment secrets без помещения значений в Git.
+1. Сопоставлены требования ДЗ № 6 и существующая архитектура.
+2. Проведён AI-assisted OWASP review и составлен реестр findings.
+3. Объединён и усилен CI/publish pipeline.
+4. Реализованы antiforgery и дополнительные security controls.
+5. Реализован OAuth 2.0 через Яндекс ID.
+6. Реализована opt-in Яндекс Метрика.
+7. Добавлены JSON logging, health checks и Docker log rotation.
+8. Расширены unit/component/API/browser tests.
+9. Проверен опубликованный multi-platform image.
+10. Учебный стенд развёрнут в приватной сети с существующими Traefik/PKI.
+11. Документация синхронизирована с текущим кодом и эксплуатационной моделью.
 
-**Проверка**
+## 4. Проверка результата
 
-Сопоставить ДЗ, `AGENTS.md`, техническое задание и deployment settings.
+Локально 20 сентября 2026 года подтверждены:
 
-**Критерий готовности**
+- format и locked restore;
+- Release build без предупреждений;
+- 36 Core/UI-тестов;
+- 15 API-тестов;
+- NuGet audit без найденных vulnerable packages;
+- antiforgery, OAuth с fake scheme и ограничения аналитики;
+- health endpoint и формат JSON-логов.
 
-Яндекс ID разрешён актуальными инструкциями; схема/порт URL и Redirect URI,
-ветка, runner и image name однозначно определены.
+[GitHub Actions run от 23 сентября 2026 года](https://github.com/Tipz/HT6/actions/runs/35828731866)
+успешно выполнил build/tests, CodeQL, Compose/Chromium backend smoke,
+multi-platform publish и smoke опубликованного digest.
 
-### Этап 2 — CI, quality gate и security baseline
+Владелец проекта подтвердил на локальном HTTPS-стенде:
 
-**Цель**
+- ручной deployment `docker-compose.deploy.yml`;
+- вход через Яндекс ID;
+- работу настроенного счётчика Яндекс Метрики.
 
-Блокировать публикацию и деплой при неуспешной проверке.
+## 5. Переносимость и границы
 
-**Изменения**
+Публичный IP и внешний хостинг отсутствуют. Репозиторий не содержит
+конфигурацию существующих Traefik и локальной PKI.
 
-Workflow в `.github/workflows`, при необходимости `Directory.Build.props`,
-первичная версия `security_audit.md`.
+Для другого окружения требуются:
 
-**Реализация**
+- Docker Engine и Docker Compose;
+- HTTPS reverse proxy и сертификат;
+- собственные Яндекс ID Client ID/Secret и Redirect URI;
+- собственный номер счётчика Метрики;
+- секреты в исключённом из Git env-файле или secret store;
+- правила firewall, соответствующие выбранному `APP_BIND_ADDRESS`.
 
-- Перевести триггеры с `master` на `main`.
-- Добавить `dotnet format --verify-no-changes`.
-- Добавить `dotnet package list --include-transitive --vulnerable`.
-- Сохранить Release build, два xUnit-проекта и backend smoke.
-- Подключить CodeQL и dependency review при доступности функций GitHub.
-- Ограничить permissions по jobs и закрепить сторонние actions по полному SHA.
-- Публиковать образ только после всех проверок.
-- Провести AI-assisted OWASP review с ручной проверкой каждой находки.
+DAST, penetration testing и централизованное хранилище логов не входят в
+репозиторий. Отдельный scheduled GitHub uptime workflow отсутствует, поскольку
+GitHub-hosted runner не видит приватный стенд.
 
-**Проверка**
+## 6. Связанные документы
 
-Тестовый PR с нарушенным форматированием падает до publish; корректный PR
-проходит и сохраняет отчёты.
-
-**Критерий готовности**
-
-Все quality/security/test jobs обязательны, а неуспешный job исключает публикацию.
-
-### Этап 3 — Security hardening, health и JSON-логи
-
-**Цель**
-
-Исправить подтверждённые риски базового приложения.
-
-**Изменения**
-
-`Together.Api/Program.cs`, `Together.Client/Storage/ApiHttp.cs`, auth/API
-endpoints, appsettings, env-шаблоны и тесты.
-
-**Реализация**
-
-- Добавить antiforgery flow.
-- Усилить password policy для новых паролей без блокировки существующих.
-- Проверить rate limit и lockout.
-- Убрать production fallback на известный пароль БД.
-- Исправить небезопасные deployment defaults.
-- Настроить forwarded/security headers и JSON console logs.
-- Расширить тесты health/readiness.
-
-**Проверка**
-
-Запрос без token отклоняется, с token проходит; CRUD, ownership и `409` не
-регрессируют; логи являются JSON и не содержат чувствительных данных.
-
-**Критерий готовности**
-
-Подтверждённые high/critical findings устранены либо имеют документированное
-решение о принятии риска.
-
-### Этап 4 — OAuth 2.0 через Яндекс ID
-
-**Цель**
-
-Добавить внешний вход без замены существующей Identity-модели.
-
-**Изменения**
-
-`Together.Api.csproj`, lock-файл, `Program.cs`, новый endpoint-модуль,
-`ApiRoutes.cs`, `AuthClient.cs`, `Login.razor`, конфигурация и тесты.
-
-**Реализация**
-
-- Зарегистрировать отдельное production-приложение Яндекс OAuth типа «для
-  авторизации пользователей» и запросить только минимальные права на ID/email.
-- Настроить OAuth handler, authorization code flow, challenge, callback, token
-  exchange и получение профиля через API Яндекс ID.
-- Валидировать локальный return URL.
-- Создавать Identity user/login для нового аккаунта.
-- Безопасно обрабатывать совпадающий email.
-- Добавить русскую кнопку и состояния ошибки/отмены.
-- Не передавать provider token в Blazor bundle.
-
-**Проверка**
-
-Integration tests используют тестовую authentication scheme; ручной тест
-проверяет Яндекс ID на production URL машины `192.168.1.26` с зарегистрированным
-Redirect URI.
-
-**Критерий готовности**
-
-Яндекс ID и password login работают одновременно, а владение поездками не
-меняется.
-
-### Этап 5 — Аналитика с согласием
-
-**Цель**
-
-Получать минимальную продуктовую статистику без пользовательских данных.
-
-**Изменения**
-
-`Together.Client/Program.cs`, новый `AnalyticsClient`, JS-модуль, клиентская
-конфигурация, consent-компонент и тесты.
-
-**Реализация**
-
-- Не загружать тег Яндекс Метрики до согласия.
-- Хранить только выбор consent.
-- Ограничить цели и параметры allowlist-списком.
-- Удалять query string из page view.
-- Предоставить отзыв согласия.
-
-**Проверка**
-
-До согласия запросов к `mc.yandex.ru` нет; после согласия SPA-просмотры и
-разрешённые цели видны в отладке/отчётах Яндекс Метрики и не содержат данных
-поездок.
-
-**Критерий готовности**
-
-Аналитика работает opt-in и не принимает произвольные model values.
-
-### Этап 6 — Production deployment и мониторинг
-
-**Цель**
-
-Автоматически разворачивать проверенный immutable image.
-
-**Изменения**
-
-CI/CD workflow, при необходимости deployment Compose/env-шаблон, GitHub
-Environment `production`, self-hosted runner машины `192.168.1.26` и
-`integration_documentation.md`.
-
-**Реализация**
-
-- Передавать точный image digest из publish в deploy.
-- Разрешить production deploy только для push в `main`.
-- Выполнять deploy job только на защищённом self-hosted runner машины
-  `192.168.1.26`; не запускать на нём pull request jobs.
-- Всегда разворачивать `ghcr.io/tipz/ht6@<digest>`.
-- Использовать существующие Compose и отдельный `migrate`.
-- После deploy ждать `/health/ready` и запускать smoke.
-- Настроить uptime monitor для `/health` и alert contact.
-- Описать rollback на предыдущий digest.
-
-**Проверка**
-
-Тестовый commit создаёт GitHub Deployment, сервер запускает ожидаемый digest,
-миграция завершается успешно, monitor получает `200`.
-
-**Критерий готовности**
-
-Push в `main` автоматически обновляет production только после всех проверок.
-
-### Этап 7 — Итоговая приёмка и документация
-
-**Цель**
-
-Сформировать полный комплект сдачи с фактическими результатами.
-
-**Изменения**
-
-`integration_documentation.md`, `security_audit.md`, `README.md`, `SUBMISSION.md`,
-`development_report.md`, `docs/prompt_templates.md` и evidence с вымышленными
-данными.
-
-**Реализация**
-
-- Описать CI/CD, secrets, OAuth, аналитику, мониторинг, логи и rollback.
-- Закрыть security findings и записать остаточные риски.
-- Зафиксировать AI-промпты и способ ручной проверки результатов.
-- Выполнить полный набор проверок и записать реальные команды/результаты.
-
-**Проверка**
-
-Инструкции воспроизводимы, ссылки доступны, а документация соответствует коду.
-
-**Критерий готовности**
-
-Все обязательные артефакты ДЗ присутствуют, проверки действительно выполнены,
-секретов и реальных пользовательских данных в репозитории нет.
-
-## 6. Стратегия тестирования
-
-### Unit и component tests
-
-- аналитика ничего не отправляет до consent;
-- route перед аналитикой очищается от query string;
-- allowlist не принимает произвольные параметры;
-- login page показывает кнопку Яндекс ID и callback errors;
-- OAuth redirect принимает только локальный return URL;
-- `ApiHttp` добавляет antiforgery token;
-- пользовательский ввод по-прежнему выводится как текст.
-
-### Integration tests
-
-- challenge и успешный/неуспешный callback;
-- повторный external login использует того же пользователя;
-- совпадение email не перехватывает существующий аккаунт;
-- password login остаётся рабочим;
-- state-changing API без CSRF token отклоняется;
-- ownership, concurrency и транзакции сохраняются;
-- health/readiness правильно отражают состояние БД.
-
-### Пользовательские сценарии
-
-- регистрация и password login;
-- первый и повторный вход через Яндекс ID, отмена и ошибка;
-- сохранение поездки после OAuth login;
-- opt-in/opt-out аналитики и проверка счётчика/целей Яндекс Метрики;
-- автоматический deploy и сохранность данных после обновления;
-- получение alert при недоступности стенда.
-
-### Затронутые тесты
-
-- `TripsApiTests` потребуется antiforgery token;
-- `BackendSmoke` будет использовать обновлённый auth flow;
-- `HealthEndpointTests` расширится readiness-сценарием;
-- `TogetherApiFactory` получит тестовую external authentication scheme;
-- component tests login/consent потребуют JSInterop и NavigationManager mocks.
-
-## 7. Риски
-
-- До регистрации приложения Яндекс OAuth необходимо зафиксировать схему, порт и
-  callback path production URL.
-- GitHub-hosted runner не маршрутизируется к `192.168.1.26`; deploy зависит от
-  доступности и защиты self-hosted runner на production-машине.
-- Независимые workflow могут опубликовать образ параллельно с упавшим CI.
-- Связывание пользователей только по email создаёт риск захвата аккаунта.
-- Ошибочная antiforgery-интеграция может сломать все сохранения клиента.
-- Неверные forwarded headers нарушат OAuth callback и Secure cookies.
-- Аналитика может раскрыть query/model data при отсутствии жёсткого allowlist.
-- Неудачная миграция способна остановить релиз; требуется backup и rollback.
-- Усиление password policy не должно инвалидировать существующие пароли.
-- `/health` не видит отказ БД, а `/health/ready` нельзя использовать как
-  единственный liveness probe.
-- Дублирующие workflow и документы увеличат стоимость сопровождения.
-
-## 8. Не входит в текущую задачу
-
-- платежи;
-- несколько OAuth-провайдеров;
-- роли, MFA и административная панель;
-- пользовательские данные в аналитике;
-- собственное хранилище аналитики;
-- ELK/Loki-кластер при наличии достаточных логов хостинга;
-- Kubernetes или замена PostgreSQL/Identity;
-- изменение модели поездок и реализация US-11–US-13;
-- автоматический rollback схемы БД.
-
-## 9. Критерии полной готовности
-
-- OAuth через Яндекс ID разрешён актуальными проектными инструкциями.
-- Workflow работают для `main`.
-- Format, vulnerability audit, Release build, оба xUnit-проекта и backend smoke
-  обязательны перед публикацией.
-- Multi-platform image разворачивается по immutable digest.
-- Миграция выполняется отдельным контейнером, production работает через HTTPS.
-- Password login и вход через Яндекс ID успешно работают.
-- Аналитика отправляет только разрешённые события после consent.
-- Health endpoints, внешний monitor и alerts проверены.
-- Backend пишет JSON-логи без секретов и пользовательских данных.
-- Подтверждённые high/critical findings исправлены.
-- `integration_documentation.md` и `security_audit.md` содержат фактические, а не
-  предполагаемые результаты.
-- Использование AI и ручная проверка его выводов документированы.
-- README содержит актуальные инструкции и рабочую deployment-ссылку.
-
-## 10. Фактический статус 20 сентября 2026 года
-
-Локально завершены этапы CI configuration, security hardening, fake OAuth tests,
-аналитика с consent, JSON logging и документация. Прошли format, locked restore,
-Release build, 36 unit/component tests, 15 API tests и NuGet vulnerability audit.
-
-Pending: Docker/Chromium smoke из-за отсутствия Docker CLI; GitHub workflow run,
-CodeQL/dependency review и publish без push; production deployment/monitoring без
-настроенного runner и URL; реальный Яндекс OAuth без зарегистрированного Redirect
-URI; ручная проверка Метрики без номера счётчика. Рабочая deployment-ссылка пока
-не существует и не подменена шаблоном.
+- [Основной README](../README.md)
+- [Материалы сдачи](../SUBMISSION.md)
+- [Отчёт преподавателю](homework_6_report.md)
+- [Документация интеграций](integration_documentation.md)
+- [Аудит безопасности](security_audit.md)
+- [AI-анализ логов](log_analysis.md)

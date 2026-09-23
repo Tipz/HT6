@@ -1,7 +1,8 @@
 # Выполнение домашнего задания №4
 
 > **Исторический документ.** Таблица ниже фиксирует завершение frontend-этапа ДЗ № 4.
-> В ДЗ № 5 добавлены Identity, API, PostgreSQL, Docker Compose и GitHub Actions;
+> В ДЗ № 5 добавлены Identity, API, PostgreSQL, Docker Compose и GitHub Actions,
+> а в ДЗ № 6 — OAuth 2.0, аналитика, security hardening и JSON-логи;
 > текущее состояние описано в [корневом README](../README.md) и
 > [backend-документации](../backend_documentation.md).
 

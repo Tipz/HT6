@@ -1,12 +1,11 @@
 # Аудит безопасности — домашнее задание № 6
 
-Статус: локальный аудит и подтверждённые исправления выполнены; внешние GitHub и
-production-проверки отмечены `Pending`.
-Дата обзора: 20 сентября 2026 года.
+Статус: аудит и подтверждённые исправления выполнены; остаточные риски и границы
+проверок указаны явно.
+Дата обзора: 20 сентября 2026 года; актуализация — 23 сентября 2026 года.
 
-Этот документ намеренно не объявляет планируемые проверки успешными. Результаты
-dependency audit, CodeQL, динамических тестов и production-проверок должны быть
-добавлены после их фактического выполнения.
+Документ различает автоматизированные результаты, подтверждение владельцем на
+локальном стенде и проверки, не воспроизводимые из публичного репозитория.
 
 ## 1. Область аудита
 
@@ -22,13 +21,13 @@ dependency audit, CodeQL, динамических тестов и production-п
 - существующие unit, component, API и browser tests;
 - требования `AGENTS.md`, технического задания и ДЗ № 6.
 
-Остаются внешними и не выполнялись:
+Границы аудита:
 
-- CodeQL/dependency review;
-- DAST или penetration testing;
-- проверка реального production TLS/reverse proxy;
-- OAuth security testing;
-- анализ реальных production logs.
+- DAST и penetration testing не выполнялись;
+- конфигурация существующих Traefik и локальной PKI не хранится в репозитории;
+- реальные production logs не передавались AI и не публиковались;
+- Dependency Review выполняется только для pull request и не запускался в
+  последнем push run.
 
 ## 2. Уже существующие меры защиты
 
@@ -52,8 +51,8 @@ dependency audit, CodeQL, динамических тестов и production-п
 
 ## 3. Предварительные находки
 
-Findings сопоставлены с кодом; исправления подтверждены указанными тестами либо
-оставлены Pending там, где требуется production-инфраструктура.
+Findings сопоставлены с кодом; исправления подтверждены указанными тестами,
+успешным GitHub Actions run либо владельцем локального стенда.
 
 ### SA-01 — Antiforgery для изменяющих cookie-запросов
 
@@ -69,7 +68,7 @@ Findings сопоставлены с кодом; исправления подт
   всем POST/PUT/PATCH/DELETE, middleware валидирует token. OAuth сохраняет штатные
   state/correlation cookies.
 - **Проверка:** integration tests отклоняют отсутствующий/неверный token и
-  выполняют CRUD с валидным token. Browser smoke Pending без Docker.
+  выполняют CRUD с валидным token; GitHub Actions backend smoke успешно прошёл.
 
 ### SA-02 — Слабая политика новых паролей
 
@@ -102,13 +101,15 @@ Findings сопоставлены с кодом; исправления подт
 ### SA-04 — Небезопасные значения в deployment env-шаблоне
 
 - **Предварительная severity:** Medium.
-- **Статус:** Closed.
+- **Статус:** Partially closed; bind зависит от топологии стенда.
 - **Компонент:** `deploy.env.example`.
-- **Наблюдение:** шаблон содержит `POSTGRES_PASSWORD=together`, bind на
-  `0.0.0.0` и `SECURE_COOKIES=false`. Комментарии предупреждают об опасности, но
-  копирование шаблона без редактирования создаёт небезопасный стенд.
-- **Исправление:** обязательные значения оставлены пустыми, bind — `127.0.0.1`,
-  secure cookies — `true`, image требует точный digest.
+- **Наблюдение:** исходный шаблон содержал `POSTGRES_PASSWORD=together`, bind на
+  `0.0.0.0` и `SECURE_COOKIES=false`. Копирование такого шаблона без
+  редактирования создавало небезопасный стенд.
+- **Исправление:** обязательные значения оставлены пустыми, secure cookies —
+  `true`, image требует точный digest. Текущий шаблон задаёт bind `0.0.0.0` для
+  доступа из LAN; документация требует firewall. Для proxy на том же хосте
+  рекомендуется `127.0.0.1`.
 - **Проверка исправления:** `docker compose config` с production template и review
   итоговых port/cookie settings.
 
@@ -126,27 +127,30 @@ Findings сопоставлены с кодом; исправления подт
 ### SA-06 — Publish не имеет общего обязательного gate с CI и browser smoke
 
 - **Предварительная severity:** Medium для supply chain/release integrity.
-- **Статус:** Closed locally; workflow run Pending.
+- **Статус:** Closed.
 - **Компоненты:** `.github/workflows/*.yml`.
 - **Наблюдение:** три workflow независимо запускаются на push. Publish может
   завершиться, даже если отдельный CI workflow упал. Дополнительно они слушают
   `master`, тогда как рабочая ветка называется `main`.
 - **Исправление:** один workflow связывает quality → build/tests → backend smoke →
-  publish → deploy → production smoke.
-- **Проверка исправления:** намеренно сломанный test исключает publish/deploy.
+  publish → smoke опубликованного digest. Инфраструктурно-зависимый production
+  deploy выполняется отдельно и вручную.
+- **Проверка исправления:** [успешный GitHub Actions run](https://github.com/Tipz/HT6/actions/runs/35828731866)
+  подтверждает обязательную последовательность до опубликованного image.
 
 ### SA-07 — Production proxy/security headers не зафиксированы
 
 - **Предварительная severity:** Medium.
-- **Статус:** Partially closed / production verification Pending.
+- **Статус:** Partially closed; инфраструктурная конфигурация внешняя.
 - **Компоненты:** API middleware, reverse proxy и deployment documentation.
 - **Наблюдение:** production Compose ожидает внешний HTTPS proxy, но его
   конфигурации в репозитории нет. Не подтверждены forwarded headers, HSTS, CSP и
   другие response headers.
 - **Исправление:** HSTS/security headers/CSP добавлены; forwarded headers включаются
-  только для явно заданных `KnownProxies`. Фактический proxy/TLS ещё не определён.
-- **Проверка исправления:** проверка production response headers, корректного
-  external scheme/host и Secure cookie.
+  только для явно заданных `KnownProxies`. Владелец подтвердил HTTPS и OAuth за
+  существующим Traefik и локальной PKI на `192.168.1.26`.
+- **Остаточная проверка:** конфигурация Traefik/PKI и снимок production response
+  headers не входят в репозиторий; их нужно проверять на целевом хосте.
 
 ### SA-08 — Глобальный auth rate limit может стать причиной отказа в обслуживании
 
@@ -165,24 +169,40 @@ Findings сопоставлены с кодом; исправления подт
 ### SA-09 — Отсутствует автоматический vulnerability/SAST gate
 
 - **Предварительная severity:** Medium.
-- **Статус:** NuGet gate closed; GitHub SAST Pending.
+- **Статус:** NuGet gate и CodeQL closed; Dependency Review требует PR.
 - **Компоненты:** GitHub Actions и repository settings.
 - **Наблюдение:** build может обнаружить часть NuGet audit warnings, но отдельного
   отчёта транзитивных уязвимостей, dependency review и CodeQL нет.
 - **Исправление:** NuGet JSON gate падает при наличии vulnerability; dependency
   review и CodeQL добавлены как availability-dependent jobs.
-- **Проверка исправления:** сохранённый отчёт и тестовый PR с известной запрещённой
-  зависимостью в изолированной ветке.
+- **Проверка:** NuGet audit и CodeQL успешно прошли в
+  [GitHub Actions](https://github.com/Tipz/HT6/actions/runs/35828731866).
+  Dependency Review ожидаемо пропущен для push и должен проверяться в PR.
 
-## 4. OAuth threat model до реализации
+### SA-10 — OAuth credential в отслеживаемом env-шаблоне
+
+- **Предварительная severity:** High, если значение было действующим.
+- **Статус:** Значения удалены из текущего шаблона; ротация зависит от владельца.
+- **Компонент:** `.env.example` и Git history.
+- **Наблюдение:** шаблон содержал конкретные значения Client ID и Client Secret,
+  похожие на credential реального OAuth-приложения.
+- **Исправление:** в `.env.example` оставлены пустые placeholders; рабочие значения
+  должны находиться только в исключённом из Git `.env`/`.env.deploy` или secret
+  store.
+- **Обязательное действие:** если прежний Client Secret когда-либо был
+  действующим, его необходимо отозвать и выпустить заново. Удаление из текущего
+  файла не удаляет значение из истории Git.
+
+## 4. OAuth threat model и реализованные меры
 
 Единственный разрешённый provider — Яндекс ID. Используется authorization code
 flow через backend; OAuth token не передаётся в Blazor bundle и не записывается в
 логи. Запрашивается только `login:email`; устойчивый `id` входит в стандартный
 ответ API Яндекс ID. Для тестирования и production используются разные OAuth
 приложения.
-Scheme, host, port и path Redirect URI должны соответствовать production URL на
-`192.168.1.26` и настройкам production-приложения Яндекс OAuth.
+Scheme, host, port и path Redirect URI соответствуют локальному HTTPS URL стенда
+на `192.168.1.26` и настройкам OAuth-приложения. Для другого окружения требуется
+новая конфигурация URL и Redirect URI.
 
 Следующие риски должны быть закрыты дизайном:
 
@@ -211,7 +231,7 @@ Scheme, host, port и path Redirect URI должны соответствова�
 - CSP allowlist ограничивается фактически используемыми доменами Яндекс Метрики;
   нельзя добавлять широкие wildcard-разрешения.
 
-## 6. План автоматизированных проверок
+## 6. Автоматизированные проверки
 
 ```powershell
 dotnet restore Together.slnx --locked-mode
@@ -222,16 +242,19 @@ dotnet test tests/Together.Api.Tests/Together.Api.Tests.csproj -c Release
 dotnet package list --project Together.slnx --include-transitive --vulnerable
 ```
 
-Дополнительно планируются:
+Дополнительно реализованы:
 
 - CodeQL для C# и JavaScript;
 - GitHub dependency review;
 - Compose/Chromium backend smoke;
 - antiforgery positive/negative tests;
 - OAuth callback tests с тестовой authentication scheme;
-- проверка production TLS и security headers;
 - проверка JSON-логов на секреты и персональные данные;
 - ручной OWASP Top 10 checklist.
+
+Production TLS работает на локальном стенде за существующим Traefik и локальной
+PKI по подтверждению владельца. Конфигурация proxy и воспроизводимый снимок всех
+response headers в репозиторий не включены.
 
 ## 7. Использование AI в аудите
 
@@ -240,9 +263,9 @@ boundaries и сопоставления кода с категориями OWAS
 конкретном участке репозитория, но severity и эксплуатируемость должны быть
 подтверждены тестом или документированным анализом.
 
-После реализации необходимо добавить:
+В репозитории сохранены:
 
-- точные промпты из `docs/prompt_templates.md`;
+- промпты в `docs/prompt_templates.md`;
 - обезличенные входные данные;
 - вывод AI;
 - решение разработчика: принято, отклонено или требует проверки;
@@ -258,12 +281,13 @@ AI-сервисам.
 | Проверка | Дата | Результат | Evidence/команда |
 | --- | --- | --- | --- |
 | NuGet direct/transitive audit | 2026-09-20 | Passed, 0 vulnerable packages | `dotnet package list --project Together.slnx --include-transitive --vulnerable --format json` |
-| CodeQL | Не выполнено | Pending GitHub | Job добавлен, доступность Advanced Security не подтверждена |
-| Dependency review | Не выполнено | Pending GitHub | Job добавлен как availability-dependent |
+| CodeQL | 2026-09-23 | Passed | [GitHub Actions job](https://github.com/Tipz/HT6/actions/runs/35828731866) |
+| Dependency review | 2026-09-23 | Skipped for push | Запускается только для pull request |
 | OWASP manual review | 2026-09-20 | Completed locally | Раздел 3, SA-01–SA-09 |
 | Antiforgery tests | 2026-09-20 | Passed | `Together.Api.Tests`, missing/invalid/valid token |
 | OAuth security tests | 2026-09-20 | Passed with fake scheme | success/cancel/repeat/email conflict/open redirect/password login |
-| Production TLS/headers | Не выполнено | Pending | — |
+| Production TLS/OAuth | 2026-09-23 | Подтверждено владельцем локального стенда | Traefik и локальная PKI на `192.168.1.26`; конфигурация внешняя |
+| Compose/Chromium smoke | 2026-09-23 | Passed | [GitHub Actions job](https://github.com/Tipz/HT6/actions/runs/35828731866) |
 | Log privacy review | 2026-09-20 | Passed on synthetic/local sample | `GET /health?forbidden-marker`: JSON `Together.Request` contained only `/health`; `docs/log_analysis.md`; production logs were not used |
 
 ## 9. Критерии закрытия аудита
@@ -273,7 +297,8 @@ AI-сервисам.
 - Medium findings имеют исправление, срок или обоснование.
 - Dependency и SAST checks встроены в CI.
 - CSRF, OAuth, ownership и open redirect покрыты тестами.
-- Production TLS/security headers проверены на фактическом URL.
+- Production TLS/OAuth проверены владельцем на фактическом локальном URL;
+  proxy-конфигурация остаётся внешней по отношению к репозиторию.
 - Логи и аналитика не содержат запрещённых данных.
 - Реестр результатов содержит реальные даты, команды и ссылки на evidence.
 - README и integration documentation не противоречат фактической конфигурации.

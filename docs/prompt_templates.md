@@ -1,8 +1,11 @@
 # Применение промпт-шаблонов из ДЗ 2
 
-> **Исторический документ.** Эти шаблоны описывают frontend-этап ДЗ № 4.
-> Актуальная архитектура ДЗ № 5 дополнена `Together.Api`, `Together.Contracts`,
-> PostgreSQL и CI/CD; рабочие правила приведены в [AGENTS.md](../AGENTS.md).
+> **Исторический документ.** Разделы 1–5 описывают frontend-этап ДЗ № 4, а
+> разделы 6–8 — промпты, использованные при подготовке ДЗ № 6. Некоторые пункты
+> фиксируют первоначальный план автоматического deploy. Текущее состояние —
+> публикация образа в CI и ручное развёртывание готового digest — описано в
+> [корневом README](../README.md); рабочие правила приведены в
+> [AGENTS.md](../AGENTS.md).
 
 Источник: соседний учебный репозиторий HT2, файл Отчет/prompt_templates.md.
 Сохранена структура RTCF: Role, Task, Context, Format. Серверный контекст
@@ -60,10 +63,13 @@ Home Services Dashboard заменён на standalone Blazor WebAssembly и Ind
 - **Context:** `main`, `ghcr.io/tipz/ht6`, защищённый self-hosted runner на
   `192.168.1.26`; pull request не публикует и не выполняется на production runner.
 - **Format:** один dependency graph, минимальные permissions, actions по полным
-  commit SHA, явные Pending для внешней конфигурации.
+  commit SHA и явное разделение автоматических, локальных и инфраструктурных
+  проверок.
 
-Ручная проверка: publish зависит от `backend_smoke`, deploy — от publish; deploy
-разрешён только для push в `main` и проверяет `ghcr.io/tipz/ht6@sha256:...`.
+Результат: publish зависит от `backend_smoke` и проверяет опубликованный
+`ghcr.io/tipz/ht6@sha256:...`. Инфраструктурно-зависимый deploy job для
+self-hosted runner был подготовлен, но отключён; production обновляется вручную
+через `docker-compose.deploy.yml`.
 
 ## 7. OWASP review
 

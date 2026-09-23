@@ -173,8 +173,10 @@ AI-анализ типичного отказа readiness выполнен на 
 - браузерный backend smoke-тест на Chromium;
 - smoke-проверку опубликованного Docker image.
 
-На текущем коммите GitHub Actions успешно выполнил проверку форматирования и
-зависимостей, Release-сборку, xUnit-тесты, CodeQL и Docker Compose/Chromium smoke.
+На текущем коммите [GitHub Actions](https://github.com/Tipz/HT6/actions/runs/35828731866)
+успешно выполнил проверку форматирования и зависимостей, Release-сборку,
+xUnit-тесты, CodeQL, Docker Compose/Chromium smoke, публикацию AMD64/ARM64 image и
+smoke опубликованного digest.
 
 ## Итог
 

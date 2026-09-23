@@ -1,12 +1,11 @@
 # Интеграции и CI/CD — домашнее задание № 6
 
-Статус документа: локальная реализация завершена; внешняя production-настройка и
-проверки отмечены `Pending`.
-Последнее обновление: 20 сентября 2026 года.
+Статус документа: актуальное состояние проекта.
+Последнее обновление: 23 сентября 2026 года.
 
-Фактические результаты следует добавлять сюда только после выполнения и проверки
-соответствующего этапа. Принятый порядок работ описан в
-[IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
+Принятые решения и последовательность работ зафиксированы в
+[IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md); детали интеграций приведены
+ниже.
 
 ## 1. Исходное состояние
 
@@ -24,14 +23,15 @@ ASP.NET Core Identity cookie.
 - текстовые console logs ASP.NET Core.
 
 В репозитории реализованы OAuth2 через Яндекс ID, opt-in Яндекс Метрика,
-antiforgery, JSON-логи, связанный pipeline и deployment/monitoring workflows.
-Production runner, URL, OAuth-приложение, счётчик и alert ещё не настроены.
+antiforgery, JSON-логи и единый CI/publish pipeline. Учебный production-стенд
+работает в приватной сети на `192.168.1.26` за существующими Traefik и локальным
+центром сертификации. Публичного URL у стенда нет.
 
 ## 2. Принятые ограничения
 
 - Поездки, направления, бюджеты, возраст детей, заметки и URL предложений не
   передаются сторонним сервисам.
-- Секреты не помещаются в Git, Docker image, логи или Blazor bundle.
+- Рабочие секреты не помещаются в Git, Docker image, логи или Blazor bundle.
 - PostgreSQL остаётся основным хранилищем.
 - Миграции выполняются отдельным одноразовым контейнером до запуска приложения.
 - Data Protection keys сохраняются вне writable layer контейнера.
@@ -44,7 +44,7 @@ Production runner, URL, OAuth-приложение, счётчик и alert ещ
 
 | Workflow | Фактическая функция | Ограничение |
 | --- | --- | --- |
-| `.github/workflows/ci.yml` | Format/NuGet audit → build/xUnit → Compose/Chromium → publish digest → smoke опубликованного образа | Внешний workflow run Pending |
+| `.github/workflows/ci.yml` | Format/NuGet audit → build/xUnit → CodeQL → Compose/Chromium → publish digest → smoke опубликованного образа | [Успешный run](https://github.com/Tipz/HT6/actions/runs/35828731866) |
 
 ### Целевая последовательность
 
@@ -75,12 +75,18 @@ Compose отображает `YANDEX_CLIENT_ID` и `YANDEX_CLIENT_SECRET` в ser
 
 ### Deployment
 
-Production target — локальная машина `192.168.1.26` с Docker Compose. Оператор
+Production target — локальная машина `192.168.1.26` с Docker Compose,
+существующими Traefik и локальным центром сертификации. Оператор
 вручную выбирает опубликованный `ghcr.io/tipz/ht6@<digest>`, выполняет отдельный
 `migrate`, запускает `app` и проверяет `/health/ready`. GitHub-hosted jobs выполняют
 проверки и публикацию образа, но не обращаются к приватному LAN-адресу.
 
-До первого deploy необходимо определить:
+Compose default публикует порт на `127.0.0.1`, а текущий `deploy.env.example`
+переопределяет bind на `0.0.0.0` для доступа из LAN. При таком режиме порт должен
+быть ограничен firewall; для reverse proxy на том же хосте следует использовать
+`127.0.0.1`.
+
+При переносе в другое окружение необходимо определить:
 
 - схему и порт production URL на `192.168.1.26`;
 - TLS/reverse proxy либо явно зафиксированный режим изолированного LAN-стенда;
@@ -118,7 +124,9 @@ curl --fail "$APP_URL/health/ready"
 
 Реализован стандартным ASP.NET Core OAuth handler. При отсутствии Client ID или
 Client Secret приложение запускается с password login, а кнопка Яндекс ID скрыта.
-Реальный provider smoke остаётся Pending до регистрации приложения.
+Владелец проекта подтвердил реальный вход через Яндекс ID на локальном
+HTTPS-стенде. Для другого окружения требуется собственное OAuth-приложение и
+Redirect URI `<APP_URL>/signin-yandex`.
 
 ### Планируемый провайдер
 
@@ -217,8 +225,8 @@ Password login, регистрация и logout остаются доступн
 
 SPA-навигация отправляется методом `hit` только с очищенным путём без query string
 и fragment. Цели отправляются методом `reachGoal`. Unit-тесты подтверждают
-allowlist и очистку URL. Фактические запросы и появление целей в реальном счётчике
-остаются Pending.
+allowlist и очистку URL. Владелец проекта подтвердил работу настроенного счётчика
+на локальном стенде; в другом окружении требуется собственный номер счётчика.
 
 ## 6. Health checks и мониторинг
 
@@ -230,19 +238,20 @@ allowlist и очистку URL. Фактические запросы и поя
 
 ### Мониторинг
 
-Отдельный scheduled uptime monitor не используется. Контейнер контролируется
-локальным Docker healthcheck, а CI проверяет `/health/ready` на опубликованном
-образе. После ручного production deployment оператор отдельно проверяет
-production URL. Для обнаружения отказа всей машины потребуется внешний monitor
-на другом узле внутри доступной сети; недоступность аналитики не влияет на
-readiness приложения.
+Отдельный scheduled GitHub uptime workflow не используется. Контейнер
+контролируется Docker healthcheck и существующей локальной инфраструктурой
+Traefik, а CI проверяет `/health/ready` на опубликованном образе. GitHub-hosted
+runner не видит приватный стенд; внешний монитор всей машины при необходимости
+должен работать с другого узла доступной сети. Недоступность аналитики не влияет
+на readiness приложения.
 
 ## 7. Логирование
 
 ### Текущее состояние
 
-Используется стандартное ASP.NET Core console logging с уровнями `Information` и
-`Warning`. Централизованное хранение не настроено.
+Используется ASP.NET Core JSON console logging с уровнями `Information`,
+`Warning` и `Error`. Централизованное хранилище не входит в репозиторий и
+выбирается владельцем целевой инфраструктуры.
 
 ### Реализованное состояние
 
@@ -264,7 +273,7 @@ OAuth и аналитика необязательны для локальног
 Реальные Client Secret, password и SSH key нельзя добавлять в `.env.example`,
 `deploy.env.example`, appsettings или документацию.
 
-## 9. План проверки интеграций
+## 9. Проверка интеграций
 
 Фактический локальный набор проверок:
 
@@ -277,23 +286,21 @@ dotnet test tests/Together.Api.Tests/Together.Api.Tests.csproj -c Release
 dotnet package list --project Together.slnx --include-transitive --vulnerable
 ```
 
-Кроме того:
+Автоматизировано и подтверждено:
 
 - Compose backend smoke;
-- успешный и отменённый OAuth flow;
+- успешный и отменённый OAuth flow с тестовой authentication scheme;
 - отсутствие запросов к Яндекс Метрике до consent;
 - SPA-просмотры и цели Яндекс Метрики после consent;
-- production deployment по digest;
 - `/health` и `/health/ready`;
-- тестовый monitoring alert;
 - проверка JSON-логов на отсутствие чувствительных данных.
 
-20 сентября 2026 года выполнены format, locked restore, Release build, оба
-xUnit-проекта, NuGet audit, `/health` и просмотр JSON-лога. Docker CLI отсутствует,
-поэтому Compose/backend smoke и `docker compose config` локально не выполнялись.
-Реальные OAuth, Метрика, production deployment и monitoring alert требуют внешних
-параметров и отмечены Pending. Ссылка на новый GitHub workflow run отсутствует,
-поскольку commit/push не выполнялись.
+20 сентября 2026 года локально выполнены format, locked restore, Release build,
+оба xUnit-проекта, NuGet audit, `/health` и просмотр JSON-лога. На этой Windows-
+машине Docker CLI отсутствовал. 23 сентября 2026 года GitHub Actions успешно
+выполнил Compose/backend smoke, CodeQL, multi-platform publish и smoke
+опубликованного digest. Владелец проекта отдельно подтвердил ручной deployment,
+Яндекс ID и Метрику на локальном HTTPS-стенде.
 
 ## 10. Использование AI
 
@@ -304,10 +311,11 @@ xUnit-проекта, NuGet audit, `/health` и просмотр JSON-лога. 
 - предварительного обзора CI/CD и security controls;
 - формирования последовательного плана.
 
-После реализации здесь необходимо указать фактические промпты для:
+Фактические промпты сохранены в [prompt_templates.md](prompt_templates.md) для:
 
 - генерации/ревью GitHub Actions;
 - OWASP-аудита;
 - анализа обезличенных JSON-логов;
 
-а также команды и тесты, которыми были проверены предложения AI.
+Предложения AI проверялись сборкой, тестами, security review и успешным GitHub
+Actions run; пример анализа логов приведён в [log_analysis.md](log_analysis.md).
