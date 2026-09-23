@@ -1,271 +1,348 @@
 # Вместе в путь
 
-Текущая версия — домашнее задание № 6. К клиент-серверной реализации добавлены
-единый CI/CD pipeline, antiforgery, OAuth 2.0 через Яндекс ID, opt-in Яндекс
-Метрика, JSON-логи и production monitoring workflow. Регистрация и вход по паролю
-сохранены; платежи не входят в утверждённый объём.
+[![CI and publish](https://github.com/Tipz/HT6/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Tipz/HT6/actions/workflows/ci.yml)
 
-## **Развёртывание готового образа.** Для запуска на другой инфраструктуре используйте
-[`docker-compose.deploy.yml`](docker-compose.deploy.yml): достаточно Docker Compose и файла
-`.env.deploy`, исходники и .NET SDK на целевом сервере не нужны. Пошаговые команды и
-параметры безопасности приведены в разделе [«Развёртывание готового образа»](#развёртывание-готового-образа).
+«Вместе в путь» — учебное клиент-серверное приложение для планирования и
+сравнения семейных поездок. Пользователь может вести несколько поездок,
+сравнивать варианты размещения и направлений, рассчитывать бюджет и хранить
+данные в своей учётной записи.
 
-Архитектура, API и развёртывание описаны в [backend_documentation.md](backend_documentation.md),
-а требования ДЗ № 5 — в [docs/backend_requirements.md](docs/backend_requirements.md).
+Текущая версия выполнена в рамках домашнего задания № 6. К приложению добавлены
+CI/CD, аудит безопасности, OAuth 2.0 через Яндекс ID, Яндекс Метрика с явным
+согласием, health checks и структурированные JSON-логи. Вход по email и паролю
+сохранён. Платёжный сервис не используется, поскольку он является опциональным и
+не требуется предметной области проекта.
 
-## Быстрый локальный запуск
-
-```powershell
-Copy-Item .env.example .env
-# Укажите длинный случайный POSTGRES_PASSWORD в .env
-# Для локального http://localhost:8080 установите SECURE_COOKIES=false
-docker compose up --build
-```
-
-После успешной миграции приложение доступно на `http://localhost:8080`. Файл `.env`
-исключён из Git; секреты нельзя добавлять в `appsettings.json` или Blazor bundle.
-`SECURE_COOKIES=true` оставляйте для production и HTTPS. Значение `false` необходимо
-для локального `http://localhost:8080` и допустимо только на изолированном стенде.
-
-Готовый multi-platform образ публикуется в GitHub Container Registry:
-
-```text
-ghcr.io/tipz/ht6:latest
-```
-
-`latest` следует за веткой `main`. Production workflow разворачивает только
-неизменяемую ссылку `ghcr.io/tipz/ht6@sha256:...`, полученную из publish job.
-
-Адаптивное приложение для сравнения семейных поездок по бюджету, дороге и удобствам для детей.
-Frontend создан в ДЗ № 4 по [исходному ТЗ](docs/technical_specification.md) и расширен backend в ДЗ № 5.
+![Основной экран приложения с вымышленными данными](docs/evidence/chromium-1440.png)
 
 ## Возможности
 
-- Несколько независимых поездок: даты, ночи, взрослые и возраст детей.
-- Создание, редактирование и удаление вариантов направления и жилья.
-- Шесть статей бюджета в рублях за всю семью за всю поездку. Расчёт в целых копейках; пустое значение отличается от нуля.
-- Сравнение двух и более вариантов по семи переключаемым критериям.
-- Пометка проверки расходов при изменении дат или семьи.
-- Серверное сохранение после входа, обработка сетевых ошибок и конфликтов версий.
-- Добровольный импорт старых поездок из IndexedDB без автоматического удаления локальной копии.
+- регистрация и вход по паролю или через Яндекс ID;
+- несколько независимых поездок с датами, составом семьи и возрастом детей;
+- создание, редактирование и удаление вариантов направления и жилья;
+- шесть статей бюджета с расчётом в целых копейках;
+- различение неизвестной суммы и нулевого расхода;
+- сравнение двух и более вариантов по семи переключаемым критериям;
+- серверное хранение данных в PostgreSQL с изоляцией пользователей;
+- защита от потери изменений при сетевой ошибке или конфликте версий;
+- добровольный импорт данных старой IndexedDB-версии без удаления локальной
+  копии;
+- адаптивный русскоязычный интерфейс на MudBlazor.
 
-Основной экран следует концепции [«План поездки»](docs/ui_concepts/03-analytical.html): сине-серая палитра, сравнение перед карточками, боковая навигация на широком экране.
+Основной экран следует концепции
+[«План поездки»](docs/ui_concepts/03-analytical.html): холодная сине-серая
+палитра, блок сравнения перед карточками и боковая навигация на широком экране.
 
-![Основной экран, вымышленные данные](docs/evidence/chromium-1440.png)
+## Технологии
 
-## Стек
+| Область | Технологии |
+| --- | --- |
+| Клиент | C#, .NET 10, standalone Blazor WebAssembly, MudBlazor 9.7.0 |
+| Backend | ASP.NET Core Minimal API, ASP.NET Core Identity |
+| Данные | EF Core, Npgsql, PostgreSQL |
+| Тесты | xUnit, bUnit, Playwright .NET |
+| Эксплуатация | Docker, Docker Compose, GitHub Actions, GHCR |
+| Интеграции | Яндекс ID OAuth 2.0, Яндекс Метрика |
 
-C# / .NET 10, **Blazor WebAssembly Standalone**, **ASP.NET Core Minimal API**, **PostgreSQL**, **MudBlazor 9.7.0**.
-Бизнес-правила и валидация — C#; EF Core/Npgsql — серверные данные; IndexedDB используется только для импорта старой версии.
-Тесты: xUnit, bUnit, Playwright .NET.
+Бизнес-модель, вычисления и валидация находятся в `Together.Core` и не зависят
+от браузера или базы данных. Контракты API выделены в `Together.Contracts`.
 
-## Запуск
+## Быстрый запуск через Docker Compose
 
-Нужен .NET SDK **10.0.303** (см. точную фиксацию версии в global.json).
-Node.js и npm для сборки и запуска не нужны.
-
-Для запуска без Docker сначала подготовьте PostgreSQL и примените миграцию, затем из корня репозитория в двух терминалах:
+Потребуются Docker Engine и Docker Compose. Из корня репозитория:
 
 ```powershell
-dotnet restore Together.slnx
+Copy-Item .env.example .env
+```
+
+Перед запуском обязательно задайте в `.env` новый длинный пароль PostgreSQL. Для
+изолированного локального HTTP-стенда также установите:
+
+```dotenv
+POSTGRES_PASSWORD=replace-with-a-long-random-password
+SECURE_COOKIES=false
+```
+
+Запустите приложение:
+
+```powershell
+docker compose up --build -d
+docker compose ps
+```
+
+После успешного завершения контейнера `migrate` приложение доступно по адресу
+<http://localhost:8080>. Состояние готовности можно проверить запросом
+<http://localhost:8080/health/ready>.
+
+Остановка без удаления данных:
+
+```powershell
+docker compose down
+```
+
+Файл `.env` исключён из Git. Не сохраняйте пароли, OAuth Client Secret и строки
+подключения в `appsettings.json`, Docker image, логах или Blazor bundle.
+
+## Запуск для разработки без Docker
+
+Потребуются:
+
+- .NET SDK **10.0.303**, зафиксированный в [`global.json`](global.json);
+- PostgreSQL;
+- два терминала для API и клиента.
+
+Подготовьте строку подключения `ConnectionStrings__Together`, затем восстановите
+инструменты и примените миграции:
+
+```powershell
+dotnet restore Together.slnx --locked-mode
 dotnet tool restore
 dotnet tool run dotnet-ef database update --project src/Together.Api
+```
+
+Запустите API:
+
+```powershell
 dotnet run --project src/Together.Api
+```
+
+В другом терминале запустите клиент:
+
+```powershell
 dotnet run --project src/Together.Client
 ```
 
-Откройте **http://localhost:5180**, зарегистрируйтесь или войдите. Для новой учётной
-записи приложение создаёт вымышленный пример. Найденные поездки IndexedDB не
-отправляются до подтверждения импорта и не удаляются автоматически.
-
-Для разработки с hot reload:
+Клиент будет доступен по адресу <http://localhost:5180>, API — по адресу
+<http://localhost:5182>. Для разработки клиента с hot reload можно использовать:
 
 ```powershell
 dotnet watch --project src/Together.Client
 ```
 
-Сохраняйте один адрес и порт: браузер разделяет данные localhost и 127.0.0.1, а также разных портов.
+Node.js и npm для сборки приложения не требуются.
 
+## Яндекс ID
 
-## Проверки
-
-```powershell
-dotnet build Together.slnx -c Release
-dotnet test tests/Together.Tests/Together.Tests.csproj -c Release
-dotnet test tests/Together.Api.Tests/Together.Api.Tests.csproj -c Release
-dotnet run --project tests/Together.BrowserTests -- --install
-```
-
-Актуальный end-to-end сценарий ДЗ № 5 выполняется на полном Compose-стенде с
-PostgreSQL. После `docker compose up --build -d` запустите:
-
-```powershell
-$env:APP_URL = 'http://localhost:8080'
-dotnet run --project tests/Together.BrowserTests -- --backend-smoke
-Remove-Item Env:APP_URL
-```
-
-Сценарий Chromium проверяет регистрацию, загрузку серверного примера, сохранение
-после перезагрузки и выход. Он использует вымышленные данные и возвращает ненулевой
-код при ошибке. Не запускайте несколько копий одновременно: они записывают одни и
-те же файлы отчёта.
-
-Результаты и скриншоты: [docs/evidence](docs/evidence/).
-Исторический итог для ДЗ № 5: 32 модульных/компонентных и 4 API-теста прошли; Compose с
-PostgreSQL и отдельный backend smoke-сценарий Chromium проверены на Linux-ВМ.
-Существующий двухбраузерный набор без `--backend-smoke` относится к исторической
-IndexedDB-версии ДЗ № 4 и не является проверкой текущего backend.
-Описание проверок, найденных дефектов и ограничений: [development_report.md](development_report.md).
-
-Локальная проверка ДЗ № 6 от 20 сентября 2026 года: 36/36 unit/component и
-15/15 API tests, Release build без предупреждений, format и NuGet audit прошли.
-Docker CLI на текущей машине отсутствует, поэтому актуальный Compose/Chromium
-smoke, `docker compose config`, production deploy и alert не объявляются
-успешными; они остаются обязательными внешними проверками.
-
-GitHub автоматически выполняет:
-
-- [единый CI и publish](.github/workflows/ci.yml): locked restore,
-  `dotnet format`, NuGet audit, Release build, оба xUnit-проекта,
-  Compose/Chromium backend smoke, AMD64/ARM64 publish и smoke опубликованного образа.
-
-Pull request выполняет только проверки. Publish зависит от всех обязательных
-проверок и выполняется после push или ручного запуска workflow. Production
-обновляется вручную готовым образом по инструкции ниже.
-
-## Яндекс ID и Яндекс Метрика
-
-OAuth включается только при одновременном наличии server-side переменных:
+OAuth включается только при наличии обеих server-side настроек:
 
 ```text
 Authentication__Yandex__ClientId
 Authentication__Yandex__ClientSecret
 ```
 
-Стандартный callback handler: `/signin-yandex`. Точный production Redirect URI
-имеет вид `<APP_URL>/signin-yandex`; схема и порт пока не зафиксированы владельцем,
-поэтому приложение у провайдера и реальный OAuth smoke остаются Pending. Запрашивается
-только `login:email`; access token не передаётся клиенту и не сохраняется.
+При запуске через Compose им соответствуют `YANDEX_CLIENT_ID` и
+`YANDEX_CLIENT_SECRET`. Callback приложения:
 
-Метрика включается публичным `YandexMetrika__CounterId`. До явного согласия тег
-`mc.yandex.ru` не загружается. Разрешены только очищенные SPA paths и цели
-`login_succeeded` (`method=password|yandex`) и `trip_created`; данные поездок,
-email, query string и fragment не передаются. Согласие можно отозвать.
+```text
+<APP_URL>/signin-yandex
+```
 
-## Развёртывание готового образа
+Этот точный URI необходимо зарегистрировать в консоли Яндекс ID. Backend
+использует Authorization Code Flow с PKCE, запрашивает только `login:email`, не
+передаёт access token в Blazor и не сохраняет его после входа.
 
-Для быстрого запуска без исходников и локальной сборки используйте отдельный
+Интеграция проверена на локальном HTTPS-стенде. Production-стенд размещён в
+частной сети на машине `192.168.1.26`; TLS завершается существующим Traefik, а
+сертификаты выдаются локальным центром сертификации. При переносе в другую
+инфраструктуру необходимо настроить собственные DNS/URL, HTTPS reverse proxy,
+сертификат, Client ID, Client Secret и Redirect URI.
+
+## Яндекс Метрика
+
+Метрика включается настройкой `YandexMetrika__CounterId`, которой в Compose
+соответствует `YANDEX_METRIKA_COUNTER_ID`.
+
+- скрипт Метрики не загружается до явного согласия пользователя;
+- согласие можно отозвать;
+- в Метрику передаются только очищенные SPA paths без query string и fragment;
+- разрешены цели `login_succeeded` с методом `password` или `yandex` и
+  `trip_created`;
+- email, идентификатор пользователя, поездки, возраст детей и заметки не
+  передаются.
+
+Интеграция проверена с настроенным счётчиком на локальном стенде. В другом
+окружении необходимо создать собственный счётчик и передать его номер приложению.
+
+## CI и публикация образа
+
+Workflow [`.github/workflows/ci.yml`](.github/workflows/ci.yml) запускается для
+pull request и push в `main`.
+
+Последовательность проверок:
+
+```text
+locked restore
+  → format и NuGet audit
+  → Release build и xUnit
+  → CodeQL
+  → Docker Compose и Chromium backend smoke
+  → multi-platform publish
+  → smoke опубликованного digest
+```
+
+Pull request выполняет проверки, но не публикует образ. После успешного push в
+`main` workflow публикует образ для `linux/amd64` и `linux/arm64` в
+[GitHub Container Registry](https://github.com/Tipz/HT6/pkgs/container/ht6):
+
+```text
+ghcr.io/tipz/ht6
+```
+
+Доступны теги `latest`, `main`, `sha-<полный SHA>` и `v*` для Git-тегов.
+Production deployment рекомендуется выполнять по неизменяемой ссылке
+`ghcr.io/tipz/ht6@sha256:...`.
+
+Автоматический deployment через защищённый self-hosted GitHub runner был
+подготовлен для локальной production-машины, но отключён в текущем универсальном
+workflow. Такой job зависит от конкретных runner labels, локального пути,
+приватной сети, reverse proxy и PKI. Текущая версия автоматически проверяет и
+публикует готовый образ, а его развёртывание выполняется вручную на целевом
+Docker-хосте.
+
+## Production deployment готового образа
+
+Для развёртывания без исходников и локальной сборки используйте
 [`docker-compose.deploy.yml`](docker-compose.deploy.yml):
 
 ```bash
 cp deploy.env.example .env.deploy
 # PowerShell: Copy-Item deploy.env.example .env.deploy
-# Обязательно задайте POSTGRES_PASSWORD и точный TOGETHER_IMAGE=@sha256:...
+```
+
+Заполните как минимум:
+
+```dotenv
+TOGETHER_IMAGE=ghcr.io/tipz/ht6@sha256:replace-with-published-digest
+POSTGRES_PASSWORD=replace-with-a-long-random-password
+```
+
+Для OAuth и аналитики также задайте:
+
+```dotenv
+YANDEX_CLIENT_ID=
+YANDEX_CLIENT_SECRET=
+YANDEX_METRIKA_COUNTER_ID=
+```
+
+Проверка и запуск:
+
+```bash
+docker compose --env-file .env.deploy --file docker-compose.deploy.yml config --quiet
 docker compose --env-file .env.deploy --file docker-compose.deploy.yml up -d
 docker compose --env-file .env.deploy --file docker-compose.deploy.yml ps
 ```
 
-Compose скачивает готовые образы приложения и PostgreSQL, ждёт готовности БД,
-однократно применяет миграции и только после этого запускает приложение. Исходники,
-.NET SDK и локальная сборка на целевом сервере не нужны. Успешно завершившийся
-контейнер `migrate` со статусом `Exited (0)` — ожидаемое состояние.
+Compose:
 
-Без переопределений `docker-compose.deploy.yml` публикует приложение только на
-`http://127.0.0.1:8080`, что подходит для reverse proxy на том же хосте. Значения из
-`.env.deploy` переопределяют эти настройки: перед запуском проверьте
-`APP_BIND_ADDRESS` и `SECURE_COOKIES`. Для прямого доступа из сети установите
-`APP_BIND_ADDRESS=0.0.0.0`; `SECURE_COOKIES=false` допустим только на изолированном
-HTTP-стенде. В production используйте `SECURE_COOKIES=true` и завершайте TLS на
-HTTPS reverse proxy или ingress.
+- загружает опубликованные образы приложения и PostgreSQL;
+- ожидает готовности PostgreSQL;
+- выполняет EF Core migrations отдельным одноразовым контейнером;
+- запускает приложение только после успешной миграции;
+- сохраняет PostgreSQL и Data Protection keys в отдельных volumes;
+- запускает приложение от пользователя `app` с read-only root filesystem.
 
-Образ содержит API и опубликованный Blazor-клиент, слушает внутренний HTTP-порт
-`8080` и работает от пользователя `app`. Compose настраивает:
+По умолчанию приложение публикуется только на `127.0.0.1:8080`, что рассчитано
+на reverse proxy на том же хосте. В production используйте HTTPS и
+`SECURE_COOKIES=true`. Для reverse proxy при необходимости задайте точный
+`TRUSTED_PROXY_IP` и включите `USE_HTTPS_REDIRECTION` только после корректной
+передачи `X-Forwarded-Proto`.
 
-- `ConnectionStrings__Together` — строка подключения к PostgreSQL;
-- отдельный одноразовый запуск образа с аргументом `--migrate`;
-- постоянные volumes `together-postgres` и `together-data-protection`;
-- read-only root filesystem приложения и временный `/tmp`.
+Проверки состояния:
 
-Проверки состояния: `/health` — доступность процесса, `/health/ready` — готовность
-с подключением к PostgreSQL. Пароли и строку подключения передавайте через secret
-store целевой инфраструктуры, а не через Docker build arguments или образ.
+- `/health` — liveness процесса;
+- `/health/ready` — readiness приложения с проверкой PostgreSQL.
 
-Для обновления измените `TOGETHER_IMAGE` на новый `v*` или `sha-*` тег и повторите
-`up -d`. Остановка не удаляет данные:
+Остановка без удаления данных:
 
 ```bash
 docker compose --env-file .env.deploy --file docker-compose.deploy.yml down
 ```
 
-Команда `down --volumes` удалит базу и ключи cookie без возможности восстановления;
-используйте её только при намеренном полном сбросе после резервного копирования.
+Не используйте `down --volumes`, если не требуется намеренно удалить базу и
+ключи cookie. Перед обновлением и изменением схемы базы сделайте резервную копию.
+Подробная инструкция находится в
+[backend_documentation.md](backend_documentation.md).
 
-Workflow публикует:
+## Безопасность, мониторинг и логи
 
-- `latest` и `main` при push в `main`;
-- `sha-<полный SHA>` для каждого опубликованного коммита;
-- `v*` при создании соответствующего Git-тега.
+В проекте реализованы:
 
-Перед первым ручным production deploy настройте `.env.deploy` на хосте и доступ
-к GHCR. Rollback выполняется заменой `TOGETHER_IMAGE` на предыдущий digest,
-повтором отдельной миграции только если она совместима, затем `up -d --no-deps app`.
-Volumes PostgreSQL и Data Protection при обновлении не удаляются.
+- antiforgery-защита изменяющих API-запросов;
+- HttpOnly, SameSite и Secure cookies;
+- CSP, HSTS и другие security headers;
+- rate limiting и блокировка повторных неуспешных входов;
+- проверка владения серверными данными;
+- optimistic concurrency с ответом `409 Conflict`;
+- аудит NuGet-зависимостей и CodeQL;
+- JSON-логи в stdout с timestamp, level, category, Event ID и Trace ID;
+- ограничение размера Docker logs;
+- Docker health checks и контроль локального стенда средствами Docker и
+  Traefik.
 
-Подробности локального Compose-запуска, миграций и резервного копирования приведены
-в [документации backend](backend_documentation.md).
+Отдельные документы:
 
-## Структура
+- [аудит безопасности](docs/security_audit.md);
+- [AI-анализ синтетического JSON-лога](docs/log_analysis.md);
+- [документация интеграций](docs/integration_documentation.md).
+
+## Проверки
+
+Release-сборка и оба основных набора xUnit:
+
+```powershell
+dotnet restore Together.slnx --locked-mode
+dotnet format Together.slnx --verify-no-changes --no-restore
+dotnet build Together.slnx --configuration Release --no-restore
+dotnet test tests/Together.Tests/Together.Tests.csproj --configuration Release --no-build --no-restore
+dotnet test tests/Together.Api.Tests/Together.Api.Tests.csproj --configuration Release --no-build --no-restore
+dotnet package list --project Together.slnx --include-transitive --vulnerable
+```
+
+Актуальный браузерный smoke выполняется на полном Compose-стенде:
+
+```powershell
+docker compose up --build -d
+$env:APP_URL = 'http://localhost:8080'
+dotnet run --project tests/Together.BrowserTests -- --backend-smoke
+Remove-Item Env:APP_URL
+```
+
+Он проверяет регистрацию, загрузку серверного примера, сохранение данных после
+перезагрузки и выход. Все тестовые данные вымышлены. Результаты и скриншоты
+находятся в [`docs/evidence`](docs/evidence).
+
+Набор без `--backend-smoke` относится к исторической IndexedDB-версии ДЗ № 4 и
+не является проверкой текущего backend.
+
+## Структура репозитория
 
 | Путь | Назначение |
 | --- | --- |
-| src/Together.Core | Модель, календарные расчёты, бюджет и валидация |
-| src/Together.Client/Components | Формы, таблица, карточки и общие элементы |
-| src/Together.Client/Pages | Основной экран и управление сохранением |
-| src/Together.Contracts | DTO и маршруты API |
-| src/Together.Api | Identity, HTTP API, EF Core и миграции PostgreSQL |
-| src/Together.Client/Storage | API-клиент и адаптер старой IndexedDB для импорта |
-| src/Together.Client/wwwroot/js | Доступ к старой IndexedDB для импорта и управление диалогом |
-| tests/Together.Tests | Модульные и компонентные тесты |
-| tests/Together.Api.Tests | Интеграционные тесты API и изоляции пользователей |
-| tests/Together.BrowserTests | Актуальный backend smoke и исторические IndexedDB-сценарии ДЗ № 4 |
-| docker-compose.yml | Локальная сборка и запуск из исходников |
-| docker-compose.deploy.yml | Быстрое развёртывание готовых образов приложения и PostgreSQL |
-| .github/workflows | CI, тестирование и публикация multi-platform образа |
-| docs | Исходное ТЗ, концепции, план и доказательства проверок |
+| `src/Together.Core` | Модель, вычисления и валидация |
+| `src/Together.Contracts` | DTO и маршруты API |
+| `src/Together.Client` | Blazor WebAssembly UI и API-клиент |
+| `src/Together.Api` | Identity, Minimal API, EF Core и миграции |
+| `tests/Together.Tests` | Модульные и компонентные тесты |
+| `tests/Together.Api.Tests` | Интеграционные тесты API и безопасности |
+| `tests/Together.BrowserTests` | Playwright browser smoke |
+| `docker-compose.yml` | Локальная сборка и запуск из исходников |
+| `docker-compose.deploy.yml` | Развёртывание опубликованного образа |
+| `.github/workflows/ci.yml` | CI, security checks и публикация GHCR image |
+| `docs` | Требования, отчёты, инструкции и evidence |
 
-Зависимости закреплены в .csproj и packages.lock.json.
-package.json включён как дополнительная точка входа для команд из формата задания; npm-зависимостей у приложения нет.
+## Документация
 
-## Хранение и границы MVP
-
-Поездки хранятся в PostgreSQL и принадлежат вошедшему пользователю. Секреты находятся
-только в переменных окружения. Импорта цен, бронирования и конвертации валют нет.
-Копирование, сортировка и отметка выбора семьи отложены согласно ТЗ.
-
-API проверяет revision и возвращает `409`, если запись уже изменена. Интерфейс
-предлагает загрузить актуальные данные и сохраняет черновик до подтверждения.
-Сохранение и новый вход требуют сети; расчёт открытой формы выполняется локально.
-
-## Материалы для сдачи
-
-- [Документация backend](backend_documentation.md)
-- [Требования ДЗ № 5](docs/backend_requirements.md)
+- [Отчёт о выполнении ДЗ № 6](docs/homework_6_report.md)
 - [Материалы сдачи ДЗ № 6](SUBMISSION.md)
 - [Документация интеграций](docs/integration_documentation.md)
 - [Аудит безопасности](docs/security_audit.md)
-- [AI-анализ синтетического лога](docs/log_analysis.md)
-- [Отчёт о разработке ДЗ № 4](development_report.md)
-- [Адаптированные промпт-шаблоны ДЗ 2](docs/prompt_templates.md)
-- [Правила работы агента](AGENTS.md)
-- [Результаты браузерных тестов](docs/evidence/browser-results.json)
-- [Измерения производительности](docs/evidence/performance.json)
+- [Backend и эксплуатация](backend_documentation.md)
+- [Техническое задание](docs/technical_specification.md)
+- [Требования backend](docs/backend_requirements.md)
+- [Пользовательские истории](docs/user_stories.md)
+- [AI-анализ логов](docs/log_analysis.md)
+- [Шаблоны AI-промптов](docs/prompt_templates.md)
 
-Репозиторий опубликован на [GitHub](https://github.com/Tipz/HT6), готовый образ —
-в [GitHub Container Registry](https://github.com/Tipz/HT6/pkgs/container/ht6).
-Публичный HTTPS-стенд в рамках репозитория не разворачивается.
-
-## Использованная документация
-
-- [Встроенные шаблоны .NET, включая blazorwasm](https://learn.microsoft.com/en-us/dotnet/core/tools/dotnet-new-sdk-templates)
-- [MudBlazor: установка](https://mudblazor.com/getting-started/installation)
-- [Playwright .NET: установка и запуск](https://playwright.dev/dotnet/docs/intro)
+Публичный HTTPS-стенд не предоставляется: учебный production-стенд работает в
+приватной локальной сети. Репозиторий и готовые multi-platform образы доступны
+через GitHub и GHCR.
