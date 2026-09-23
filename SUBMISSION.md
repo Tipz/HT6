@@ -8,13 +8,13 @@ Identity, EF Core/Npgsql и PostgreSQL. ДЗ № 6 добавляет CI/CD, sec
 
 | Требование | Реализация |
 | --- | --- |
-| CI/CD | `.github/workflows/ci.yml`: format/audit → build/tests → backend smoke → publish → deploy → production smoke |
+| CI/CD | `.github/workflows/ci.yml`: format/audit → build/tests → backend smoke → publish → smoke опубликованного образа |
 | Container | `ghcr.io/tipz/ht6`, `linux/amd64` и `linux/arm64`, deployment только по digest |
 | Deployment | `docker-compose.deploy.yml`, отдельный `migrate`, persistent PostgreSQL и Data Protection |
 | OAuth2 | Стандартный ASP.NET Core OAuth handler для Яндекс ID; password login сохранён |
 | Аналитика | Opt-in Яндекс Метрика, очищенные SPA paths, две фиксированные цели |
 | Безопасность | Antiforgery, lockout/rate limit, safe config defaults, CSP/security headers, pinned actions |
-| Monitoring | `/health`, `/health/ready`, Docker healthcheck и scheduled workflow |
+| Monitoring | `/health`, `/health/ready` и Docker healthcheck |
 | Логи | Однострочный JSON stdout с timestamp, level, category, event id и trace id |
 | Документация | `docs/integration_documentation.md`, `docs/security_audit.md`, `docs/prompt_templates.md`, `docs/log_analysis.md` |
 
@@ -36,7 +36,7 @@ Identity, EF Core/Npgsql и PostgreSQL. ДЗ № 6 добавляет CI/CD, sec
 
 - Docker/Compose/Chromium backend smoke: Docker CLI отсутствует на текущей машине;
 - CodeQL, dependency review, publish и workflow run: требуют push в GitHub;
-- production deploy/smoke и uptime alert: требуют настроенный runner и `APP_URL`;
+- ручной production deploy/smoke требует настройки production-хоста и `APP_URL`;
 - реальный Яндекс ID: требуется зарегистрировать Redirect URI после выбора схемы
   и порта production URL;
 - реальная Яндекс Метрика: требуется номер счётчика и доступ к её отчётам.

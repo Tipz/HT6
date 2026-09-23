@@ -125,15 +125,13 @@ smoke, `docker compose config`, production deploy и alert не объявляю
 
 GitHub автоматически выполняет:
 
-- [единый CI, publish и deploy](.github/workflows/ci.yml): locked restore,
+- [единый CI и publish](.github/workflows/ci.yml): locked restore,
   `dotnet format`, NuGet audit, Release build, оба xUnit-проекта,
-  Compose/Chromium backend smoke, AMD64/ARM64 publish и production deploy;
-- [uptime monitor](.github/workflows/uptime-monitor.yml) — проверку `/health`
-  каждые 15 минут на production self-hosted runner.
+  Compose/Chromium backend smoke, AMD64/ARM64 publish и smoke опубликованного образа.
 
 Pull request выполняет только проверки. Publish зависит от всех обязательных
-проверок, а deploy выполняется только после push в `main`, в GitHub Environment
-`production`, на runner с labels `self-hosted`, `production`, `together`.
+проверок и выполняется после push или ручного запуска workflow. Production
+обновляется вручную готовым образом по инструкции ниже.
 
 ## Яндекс ID и Яндекс Метрика
 
@@ -208,8 +206,7 @@ Workflow публикует:
 - `sha-<полный SHA>` для каждого опубликованного коммита;
 - `v*` при создании соответствующего Git-тега.
 
-Перед первым production deploy настройте repository variable `APP_URL`,
-Environment variable `DEPLOY_PATH`, runner labels, `.env.deploy` на хосте и доступ
+Перед первым ручным production deploy настройте `.env.deploy` на хосте и доступ
 к GHCR. Rollback выполняется заменой `TOGETHER_IMAGE` на предыдущий digest,
 повтором отдельной миграции только если она совместима, затем `up -d --no-deps app`.
 Volumes PostgreSQL и Data Protection при обновлении не удаляются.
@@ -233,7 +230,7 @@ Volumes PostgreSQL и Data Protection при обновлении не удал�
 | tests/Together.BrowserTests | Актуальный backend smoke и исторические IndexedDB-сценарии ДЗ № 4 |
 | docker-compose.yml | Локальная сборка и запуск из исходников |
 | docker-compose.deploy.yml | Быстрое развёртывание готовых образов приложения и PostgreSQL |
-| .github/workflows | Связанный CI/publish/deploy и uptime monitoring |
+| .github/workflows | CI, тестирование и публикация multi-platform образа |
 | docs | Исходное ТЗ, концепции, план и доказательства проверок |
 
 Зависимости закреплены в .csproj и packages.lock.json.

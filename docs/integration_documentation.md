@@ -44,54 +44,47 @@ Production runner, URL, OAuth-приложение, счётчик и alert ещ
 
 | Workflow | Фактическая функция | Ограничение |
 | --- | --- | --- |
-| `.github/workflows/ci.yml` | Format/NuGet audit → build/xUnit → Compose/Chromium → publish digest → deploy/smoke | Внешний workflow run Pending |
-| `.github/workflows/uptime-monitor.yml` | `/health` каждые 15 минут и ручная имитация отказа | Runner/APP_URL/alert test Pending |
+| `.github/workflows/ci.yml` | Format/NuGet audit → build/xUnit → Compose/Chromium → publish digest → smoke опубликованного образа | Внешний workflow run Pending |
 
 ### Целевая последовательность
 
 ```text
-format/security → build/tests → backend smoke → publish → deploy → production smoke
+format/security → build/tests → backend smoke → publish → published-image smoke
 ```
 
 Pull request выполняет только проверки. Push в `main` после успешных проверок
-публикует immutable image и разворачивает его в GitHub Environment `production`.
+публикует immutable image. Production обновляется вручную через
+`docker-compose.deploy.yml`.
 
-### GitHub secrets и variables без значений
+### Production secrets и variables
 
-Deployment target и image name зафиксированы. Секреты хранятся в GitHub
-Environment `production` либо только на production host.
+Deployment target и image name зафиксированы. При ручном deployment секреты и
+production-параметры хранятся только в `.env.deploy` на production host.
 
 | Имя | Тип | Назначение |
 | --- | --- | --- |
-| `DEPLOY_PATH` | Environment variable | Каталог deployment Compose на `192.168.1.26` |
-| `APP_URL` | Environment variable | Production URL для smoke после выбора схемы и порта |
-| `YANDEX_CLIENT_ID` | Environment variable | Client ID production-приложения Яндекс OAuth |
-| `YANDEX_CLIENT_SECRET` | Environment secret | Client Secret production-приложения Яндекс OAuth |
-| `YANDEX_METRIKA_COUNTER_ID` | Environment variable | Публичный номер счётчика |
+| `APP_URL` | Переменная shell оператора | Production URL для smoke после выбора схемы и порта |
+| `YANDEX_CLIENT_ID` | `.env.deploy` | Client ID production-приложения Яндекс OAuth |
+| `YANDEX_CLIENT_SECRET` | `.env.deploy` | Client Secret production-приложения Яндекс OAuth |
+| `YANDEX_METRIKA_COUNTER_ID` | `.env.deploy` | Публичный номер счётчика |
 
-Deployment job передаёт `YANDEX_CLIENT_ID` и `YANDEX_CLIENT_SECRET` только как
-server-side environment values, которые Compose отображает в
-`Authentication__Yandex__ClientId` и `Authentication__Yandex__ClientSecret`.
-
-Пароль PostgreSQL остаётся в `.env.deploy` на deployment host, OAuth client secret
-— в GitHub Environment `production`. Они не передаются в Blazor configuration и
-не печатаются командой `docker compose config --quiet`.
+Compose отображает `YANDEX_CLIENT_ID` и `YANDEX_CLIENT_SECRET` в server-side
+параметры `Authentication__Yandex__ClientId` и
+`Authentication__Yandex__ClientSecret`. Пароль PostgreSQL и OAuth client secret не
+передаются в Blazor configuration и не включаются в Docker image.
 
 ### Deployment
 
-Production target — локальная машина `192.168.1.26` с Docker Compose. Защищённый
-self-hosted GitHub Actions runner на этой машине получает digest, разворачивает
-`ghcr.io/tipz/ht6@<digest>`, выполняет `migrate`, запускает `app` и ждёт успешный
-`/health/ready`. GitHub-hosted jobs выполняют проверки и публикацию образа, но не
-пытаются обращаться к приватному LAN-адресу. Self-hosted runner используется
-только deployment job после push в `main` и никогда не запускает код из pull
-request.
+Production target — локальная машина `192.168.1.26` с Docker Compose. Оператор
+вручную выбирает опубликованный `ghcr.io/tipz/ht6@<digest>`, выполняет отдельный
+`migrate`, запускает `app` и проверяет `/health/ready`. GitHub-hosted jobs выполняют
+проверки и публикацию образа, но не обращаются к приватному LAN-адресу.
 
 До первого deploy необходимо определить:
 
 - схему и порт production URL на `192.168.1.26`;
 - TLS/reverse proxy либо явно зафиксированный режим изолированного LAN-стенда;
-- каталог Compose и labels защищённого self-hosted runner;
+- каталог Compose и доступ оператора к нему;
 - доступ Docker host к `ghcr.io/tipz/ht6`, если package является приватным;
 - backup и rollback procedure.
 
@@ -237,17 +230,12 @@ allowlist и очистку URL. Фактические запросы и поя
 
 ### Мониторинг
 
-- внешний monitor внутри доступной сети проверяет production URL `/health` на
-  `192.168.1.26`;
-- deployment smoke проверяет `/health/ready`;
-- alert отправляется на согласованный email/канал;
-- период и timeout фиксируются после выбора сервиса;
-- недоступность аналитики не влияет на readiness приложения.
-
-В качестве минимального доступного uptime monitor выбран scheduled GitHub Actions
-job на том же защищённом runner, поскольку GitHub-hosted runner не видит LAN.
-Красный workflow run использует штатные GitHub notifications. Ручной запуск с
-`simulate_failure=true` предназначен для тестового alert; результат Pending.
+Отдельный scheduled uptime monitor не используется. Контейнер контролируется
+локальным Docker healthcheck, а CI проверяет `/health/ready` на опубликованном
+образе. После ручного production deployment оператор отдельно проверяет
+production URL. Для обнаружения отказа всей машины потребуется внешний monitor
+на другом узле внутри доступной сети; недоступность аналитики не влияет на
+readiness приложения.
 
 ## 7. Логирование
 
